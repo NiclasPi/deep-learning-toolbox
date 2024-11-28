@@ -1,0 +1,6 @@
+h5py
+numpy
+pytest
+torch
+torchaudio
+torchvision
