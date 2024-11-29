@@ -1,10 +1,9 @@
-import h5py
 import numpy as np
 import pytest
 import tempfile
 from typing import Literal, Tuple
 
-from dltoolbox.dataset import H5DatasetDisk, H5DatasetMemory, H5Dataset
+from dltoolbox.dataset import H5DatasetDisk, H5DatasetMemory, H5Dataset, create_hdf5_file
 
 
 @pytest.fixture(scope="class")
@@ -18,24 +17,24 @@ def labels_shape() -> Tuple[int, ...]:
 
 
 @pytest.fixture(scope="class")
-def create_hdf5_file(data_shape, labels_shape) -> Tuple[tempfile.NamedTemporaryFile, np.ndarray, np.ndarray]:
+def create_temporary_hdf5_file(data_shape, labels_shape) -> Tuple[tempfile.NamedTemporaryFile, np.ndarray, np.ndarray]:
     tmp_file = tempfile.NamedTemporaryFile("w+b")
-    h5_file = h5py.File(tmp_file, "w")
+    tmp_file_name = tmp_file.name
+    tmp_file.close()
 
     data = np.random.randn(*data_shape).astype(np.float16)
     labels = np.random.randn(*labels_shape).astype(np.float16)
 
-    h5_file.create_dataset("data", data=data)
-    h5_file.create_dataset("labels", data=labels)
-    h5_file.close()
+    create_hdf5_file(tmp_file_name, data, labels,
+                     ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8"))
 
     return tmp_file, data, labels
 
 
 class TestDataset:
     @pytest.mark.parametrize("axis", [0, 1])
-    def test_h5ds_disk(self, data_shape, labels_shape, create_hdf5_file, axis: int) -> None:
-        h5_file, data, labels = create_hdf5_file
+    def test_h5ds_disk(self, data_shape, labels_shape, create_temporary_hdf5_file, axis: int) -> None:
+        h5_file, data, labels = create_temporary_hdf5_file
         dataset = H5DatasetDisk(h5_file.name,
                                 data_row_dim=axis,
                                 labels_row_dim=axis)
@@ -48,8 +47,8 @@ class TestDataset:
         assert np.allclose(np.take(labels, 0, axis=axis), label)
 
     @pytest.mark.parametrize("axis", [0, 1])
-    def test_h5ds_memory(self, data_shape, labels_shape, create_hdf5_file, axis: int) -> None:
-        h5_file, data, labels = create_hdf5_file
+    def test_h5ds_memory(self, data_shape, labels_shape, create_temporary_hdf5_file, axis: int) -> None:
+        h5_file, data, labels = create_temporary_hdf5_file
         dataset = H5DatasetMemory(h5_file.name,
                                   data_row_dim=axis,
                                   labels_row_dim=axis)
@@ -61,8 +60,8 @@ class TestDataset:
         assert np.allclose(np.take(labels, 0, axis=axis), label)
 
     @pytest.mark.parametrize("axis", [0, 1])
-    def test_h5ds_disk_indices(self, data_shape, labels_shape, create_hdf5_file, axis: int) -> None:
-        h5_file, data, labels = create_hdf5_file
+    def test_h5ds_disk_indices(self, data_shape, labels_shape, create_temporary_hdf5_file, axis: int) -> None:
+        h5_file, data, labels = create_temporary_hdf5_file
         indices = [0, 1, 2, 15]
         dataset = H5DatasetDisk(h5_file.name,
                                 data_row_dim=axis,
@@ -78,8 +77,8 @@ class TestDataset:
             assert np.allclose(np.take(labels, indices[i], axis=axis), label)
 
     @pytest.mark.parametrize("axis", [0, 1])
-    def test_h5ds_memory_indices(self, data_shape, labels_shape, create_hdf5_file, axis: int) -> None:
-        h5_file, data, labels = create_hdf5_file
+    def test_h5ds_memory_indices(self, data_shape, labels_shape, create_temporary_hdf5_file, axis: int) -> None:
+        h5_file, data, labels = create_temporary_hdf5_file
         indices = [0, 1, 2, 15]
         dataset = H5DatasetMemory(h5_file.name,
                                   data_row_dim=axis,
@@ -95,8 +94,8 @@ class TestDataset:
             assert np.allclose(np.take(labels, indices[i], axis=axis), label)
 
     @pytest.mark.parametrize("mode", ["disk", "memory"])
-    def test_h5ds_mode(self, data_shape, labels_shape, create_hdf5_file, mode: Literal["disk", "memory"]) -> None:
-        h5_file, data, labels = create_hdf5_file
+    def test_h5ds_mode(self, data_shape, labels_shape, create_temporary_hdf5_file, mode: Literal["disk", "memory"]) -> None:
+        h5_file, data, labels = create_temporary_hdf5_file
         dataset = H5Dataset(mode, h5_file.name)
         assert len(dataset) == data_shape[0]
         sample, label = dataset[0]
@@ -104,3 +103,11 @@ class TestDataset:
         assert label.shape == tuple([s for d, s in enumerate(labels_shape) if d != 0])
         assert np.allclose(np.take(data, 0, axis=0), sample)
         assert np.allclose(np.take(labels, 0, axis=0), label)
+
+    @pytest.mark.parametrize("mode", ["disk", "memory"])
+    def test_h5ds_user_block(self, create_temporary_hdf5_file, mode: Literal["disk", "memory"]) -> None:
+        h5_file, _, _ = create_temporary_hdf5_file
+        dataset = H5Dataset(mode, h5_file.name)
+
+        assert dataset.ub_size == 512
+        assert dataset.ub_bytes.decode(encoding="utf-8").rstrip("\x00") == "Hello from HDF5 user block!"
