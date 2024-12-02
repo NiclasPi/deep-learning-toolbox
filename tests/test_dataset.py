@@ -1,9 +1,12 @@
 import numpy as np
 import pytest
 import tempfile
+import torch
+import os
 from typing import Literal, Tuple
 
 from dltoolbox.dataset import H5DatasetDisk, H5DatasetMemory, H5Dataset, create_hdf5_file
+from dltoolbox.transforms import ToTensor
 
 
 @pytest.fixture(scope="class")
@@ -18,17 +21,20 @@ def labels_shape() -> Tuple[int, ...]:
 
 @pytest.fixture(scope="class")
 def create_temporary_hdf5_file(data_shape, labels_shape) -> Tuple[tempfile.NamedTemporaryFile, np.ndarray, np.ndarray]:
-    tmp_file = tempfile.NamedTemporaryFile("w+b")
-    tmp_file_name = tmp_file.name
+    tmp_file = tempfile.NamedTemporaryFile("w+b", delete=False)
     tmp_file.close()
 
-    data = np.random.randn(*data_shape).astype(np.float16)
-    labels = np.random.randn(*labels_shape).astype(np.float16)
+    try:
+        data = np.random.randn(*data_shape).astype(np.float16)
+        labels = np.random.randn(*labels_shape).astype(np.float16)
 
-    create_hdf5_file(tmp_file_name, data, labels,
-                     ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8"))
+        create_hdf5_file(tmp_file.name, data, labels,
+                         ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8"))
 
-    return tmp_file, data, labels
+        yield tmp_file, data, labels
+    finally:
+        tmp_file.close()
+        os.unlink(tmp_file.name)
 
 
 class TestDataset:
@@ -37,7 +43,7 @@ class TestDataset:
         h5_file, data, labels = create_temporary_hdf5_file
         dataset = H5DatasetDisk(h5_file.name,
                                 data_row_dim=axis,
-                                labels_row_dim=axis)
+                                label_row_dim=axis)
 
         assert len(dataset) == data_shape[axis] > 0
         sample, label = dataset[0]
@@ -51,7 +57,7 @@ class TestDataset:
         h5_file, data, labels = create_temporary_hdf5_file
         dataset = H5DatasetMemory(h5_file.name,
                                   data_row_dim=axis,
-                                  labels_row_dim=axis)
+                                  label_row_dim=axis)
         assert len(dataset) == data_shape[axis] > 0
         sample, label = dataset[0]
         assert sample.shape == tuple([s for d, s in enumerate(data_shape) if d != axis])
@@ -65,7 +71,7 @@ class TestDataset:
         indices = [0, 1, 2, 15]
         dataset = H5DatasetDisk(h5_file.name,
                                 data_row_dim=axis,
-                                labels_row_dim=axis,
+                                label_row_dim=axis,
                                 select_indices=indices)
 
         assert len(dataset) == 4
@@ -82,7 +88,7 @@ class TestDataset:
         indices = [0, 1, 2, 15]
         dataset = H5DatasetMemory(h5_file.name,
                                   data_row_dim=axis,
-                                  labels_row_dim=axis,
+                                  label_row_dim=axis,
                                   select_indices=indices)
 
         assert len(dataset) == 4
@@ -94,7 +100,8 @@ class TestDataset:
             assert np.allclose(np.take(labels, indices[i], axis=axis), label)
 
     @pytest.mark.parametrize("mode", ["disk", "memory"])
-    def test_h5ds_mode(self, data_shape, labels_shape, create_temporary_hdf5_file, mode: Literal["disk", "memory"]) -> None:
+    def test_h5ds_mode(self, data_shape, labels_shape, create_temporary_hdf5_file,
+                       mode: Literal["disk", "memory"]) -> None:
         h5_file, data, labels = create_temporary_hdf5_file
         dataset = H5Dataset(mode, h5_file.name)
         assert len(dataset) == data_shape[0]
@@ -111,3 +118,12 @@ class TestDataset:
 
         assert dataset.ub_size == 512
         assert dataset.ub_bytes.decode(encoding="utf-8").rstrip("\x00") == "Hello from HDF5 user block!"
+
+    @pytest.mark.parametrize("mode", ["disk", "memory"])
+    def test_h5ds_transform(self, data_shape, create_temporary_hdf5_file, mode: Literal["disk", "memory"]) -> None:
+        h5_file, data, labels = create_temporary_hdf5_file
+        dataset = H5Dataset(mode, h5_file.name, data_transform=ToTensor(), label_transform=ToTensor())
+        assert len(dataset) == data_shape[0]
+        sample, label = dataset[0]
+        assert isinstance(sample, torch.Tensor)
+        assert isinstance(label, torch.Tensor)
