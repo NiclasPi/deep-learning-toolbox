@@ -32,7 +32,7 @@ class TransformerWithMode(TransformerBase):
 
 
 class Compose(TransformerBase):
-    """Compose multiple transforms into one callable class"""
+    """Compose multiple transforms into one callable class."""
 
     def __init__(self, transforms: List[Transformer]):
         self._transforms = transforms
@@ -59,12 +59,14 @@ class ComposeWithMode(Compose):
 
 
 class NoTransform(TransformerBase):
+    """Does nothing."""
+
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         return x
 
 
 class ToTensor(TransformerBase):
-    """Convert an input to a PyTorch tensor (dtype=float32)"""
+    """Convert an input to a PyTorch tensor (dtype=float32)."""
 
     def __init__(self, device: Optional[torch.device] = None):
         self._device = device
@@ -74,3 +76,14 @@ class ToTensor(TransformerBase):
             return torch.from_numpy(x).to(dtype=torch.float32, device=self._device)
         else:
             return x.to(dtype=torch.float32, device=self._device)
+
+
+class Normalize(TransformerBase):
+    """Normalize using the mean and standard deviation."""
+
+    def __init__(self, mean: float, std: float):
+        self._mean = mean
+        self._std = std
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        return (x - self._mean) / self._std
