@@ -122,6 +122,11 @@ if __name__ == "__main__":
         help="Path to the directory containing the images."
     )
     parser.add_argument(
+        "--include-subdirs",
+        action="store_true",
+        help="Include subdirectories of the data directory."
+    )
+    parser.add_argument(
         "--file-extensions",
         type=str,
         nargs="+",
@@ -172,7 +177,8 @@ if __name__ == "__main__":
     root_path = pathlib.Path(args.data_directory)
     file_paths = list(
         chain.from_iterable(
-            root_path.glob(f"./*.{ext}", case_sensitive=False) for ext in args.file_extensions
+            root_path.glob(f"{'**/' if args.include_subdirs else './'}*.{ext}", case_sensitive=False)
+            for ext in args.file_extensions
         )
     )
     print(f"Number of files: {len(file_paths)}")
@@ -187,15 +193,6 @@ if __name__ == "__main__":
     available_memory_per_worker = int(available_memory / args.num_workers)
     print(f"Available memory per worker: {available_memory_per_worker / 1e6:.02f}MB")
 
-    # compute batch size
-    image_size = parse_image_size(args.target_size)
-    image_bytes = np.empty((*image_size, 3), dtype=np.uint8).nbytes
-    batch_size = min(
-        available_memory_per_worker // image_bytes,  # hard memory per worker constraint
-        len(file_paths) // args.num_workers  # even worker distribution
-    )
-    print(f"Batch size: {batch_size}")
-
     # determine the train, valid, test splits
     train_size, valid_size, test_size = parse_dataset_size(args.dataset_size)
     if train_size + valid_size + test_size > len(file_paths):
@@ -206,9 +203,16 @@ if __name__ == "__main__":
     train_files = file_paths[:train_size]
     valid_files = file_paths[train_size:train_size + valid_size]
     test_files = file_paths[train_size + valid_size:train_size + valid_size + test_size]
-    assert len(train_files) == train_size
-    assert len(valid_files) == valid_size
-    assert len(test_files) == test_size
+    print(f"Dataset size: {train_size} (train), {valid_size} (valid), {test_size} (test)")
+
+    # compute batch size
+    image_size = parse_image_size(args.target_size)
+    image_bytes = np.empty((*image_size, 3), dtype=np.uint8).nbytes
+    batch_size = min(
+        available_memory_per_worker // image_bytes,  # hard memory per worker constraint
+        min(k for k in [train_size, valid_size, test_size] if k > 0) // args.num_workers  # even worker distribution
+    )
+    print(f"Batch size: {batch_size}")
 
     # create datasets
     if train_size > 0:
