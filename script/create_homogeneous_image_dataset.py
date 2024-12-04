@@ -57,12 +57,13 @@ def process_batch(
 
 def create_dataset(
         out_path: str,
+        dataset_size: int,
         batch_iter: Iterator[Tuple[pathlib.Path, ...]],
         image_size: Tuple[int, int],
         num_workers: int = 1,
 ) -> None:
     with h5py.File(out_path, "w-") as h5:  # create file, fail if exists
-        dataset = h5.create_dataset("data", shape=(len(file_paths), *image_size, 3), dtype=np.uint8)
+        dataset = h5.create_dataset("data", shape=(dataset_size, *image_size, 3), dtype=np.uint8)
         index = 0
 
         # parallel processing of batches
@@ -218,6 +219,7 @@ if __name__ == "__main__":
     if train_size > 0:
         create_dataset(
             os.path.join(args.output_directory, f"{args.output_prefix}_train.hdf5"),
+            train_size,
             batched(train_files, batch_size),
             image_size,
             num_workers=args.num_workers
@@ -227,6 +229,7 @@ if __name__ == "__main__":
     if valid_size > 0:
         create_dataset(
             os.path.join(args.output_directory, f"{args.output_prefix}_valid.hdf5"),
+            valid_size,
             batched(valid_files, batch_size),
             image_size,
             num_workers=args.num_workers
@@ -236,6 +239,7 @@ if __name__ == "__main__":
     if test_size > 0:
         create_dataset(
             os.path.join(args.output_directory, f"{args.output_prefix}_test.hdf5"),
+            test_size,
             batched(test_files, batch_size),
             image_size,
             num_workers=args.num_workers
