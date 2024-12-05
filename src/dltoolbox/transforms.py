@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Union
+from typing import Callable, Iterable, List, Optional, Tuple, Union
 
 Transformer = Callable[[Union[np.ndarray, torch.Tensor]], Union[np.ndarray, torch.Tensor]]
 
@@ -45,6 +45,18 @@ class Compose(TransformerBase):
     def __len__(self) -> int:
         return len(self._transforms)
 
+    def __getitem__(self, index: int) -> Transformer:
+        return self._transforms[index]
+
+    def append(self, transform: Transformer):
+        self._transforms.append(transform)
+
+    def extend(self, transforms: Iterable[Transformer]):
+        self._transforms.extend(transforms)
+
+    def insert(self, index: int, transform: Transformer):
+        self._transforms.insert(index, transform)
+
 
 class ComposeWithMode(Compose):
     def set_train_mode(self) -> None:
@@ -87,3 +99,43 @@ class Normalize(TransformerBase):
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         return (x - self._mean) / self._std
+
+
+class Permute(TransformerBase):
+    """Permute dimensions of the given input."""
+
+    def __init__(self, dims: Tuple[int, ...]):
+        self.dims = dims
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if isinstance(x, np.ndarray):
+            return np.transpose(x, self.dims)
+        elif isinstance(x, torch.Tensor):
+            return torch.permute(x, self.dims)
+        else:
+            raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
+
+
+class RandomCrop(TransformerWithMode):
+    """Crop the given image at a random location. The input is expected to have shape [..., H, W]."""
+
+    def __init__(self, size: Tuple[int, int]) -> None:
+        super().__init__()
+        self._th, self._tw = size
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        h, w = x.shape[-2:]
+        if h < self._th or w < self._tw:
+            raise ValueError(f"crop size {(self._th, self._tw)} is larger than input image size {(h, w)}")
+        if h == self._th and w == self._tw:
+            return x
+
+        if self.is_eval():
+            # perform a center crop in eval mode
+            i = h - self._th + 1 // 2
+            j = w - self._tw + 1 // 2
+            return x[..., i:i + self._th, j:j + self._tw]
+        else:
+            i = np.random.randint(0, h - self._th + 1)
+            j = np.random.randint(0, w - self._tw + 1)
+            return x[..., i:i + self._th, j:j + self._tw]
