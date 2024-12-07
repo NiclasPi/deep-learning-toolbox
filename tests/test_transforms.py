@@ -37,6 +37,54 @@ def create_input_sample(backend: Literal["numpy", "torch"],
 
 
 class TestTransforms:
+    def test_dict_create(self) -> None:
+        x = create_input_sample(backend="numpy", shape=(10, 10))
+
+        tf = DictTransformCreate({"one": NoTransform(), "two": ToTensor()})
+        y = tf(x)
+
+        assert "one" in y and isinstance(y["one"], np.ndarray)
+        assert "two" in y and isinstance(y["two"], torch.Tensor)
+
+    def test_dict_clone(self) -> None:
+        x = {"one": create_input_sample(backend="numpy", shape=(10, 10), fill="zeros")}
+
+        tf = DictTransformClone("one", "two")
+        y = tf(x)
+
+        x["one"][0, :] = 1 # default clone is deep copy
+        assert "two" in y and not np.any(y["two"] == 1)
+
+        tf = DictTransformClone("one", "two", shallow=True)
+        z = tf(x)
+
+        x["one"][1, :] = 2
+        assert "two" in y and np.any(y["two"] == 1)
+
+
+    def test_dict_apply(self) -> None:
+        x = {"one": create_input_sample(backend="numpy", shape=(10, 10))}
+
+        tf = DictTransformApply("one", ToTensor())
+        y = tf(x)
+
+        assert "one" in y and isinstance(y["one"], torch.Tensor)
+
+        tf = DictTransformApply("two", ToTensor())
+        with pytest.raises(KeyError):
+            tf(x)
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("dims", [(1, 0, 2, 3, 4), (1, 0, 3, 2, 4)])
+    def test_permute(self, backend: Literal["numpy", "torch"], dims: Tuple[int, ...]) -> None:
+        x = create_input_sample(backend, shape=(2, 4, 6, 8, 10))
+
+        tf = Permute(dims)
+        y = tf(x)
+
+        for k in range(len(y.shape)):
+            assert y.shape[k] == x.shape[dims[k]]
+
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     def test_normalize(self, backend: Literal["numpy", "torch"]) -> None:
         x = create_input_sample(backend, shape=(10, 10), fill=2)
