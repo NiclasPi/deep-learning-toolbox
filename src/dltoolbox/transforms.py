@@ -15,22 +15,42 @@ class TransformerBase(ABC):
         raise NotImplementedError()
 
 
-class TransformerWithMode(TransformerBase):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+class TransformerMode(ABC):
+    @abstractmethod
+    def set_train_mode(self) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def set_eval_mode(self) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def is_train_mode(self) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def is_eval_mode(self) -> bool:
+        raise NotImplementedError()
+
+
+class TransformerWithMode(TransformerBase, TransformerMode):
+    def __init__(self) -> None:
         self._eval = False
 
     @abstractmethod
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         raise NotImplementedError()
 
-    def train_mode(self) -> None:
+    def set_train_mode(self) -> None:
         self._eval = False
 
-    def eval_mode(self) -> None:
+    def set_eval_mode(self) -> None:
         self._eval = True
 
-    def is_eval(self) -> bool:
+    def is_train_mode(self) -> bool:
+        return not self._eval
+
+    def is_eval_mode(self) -> bool:
         return self._eval
 
 
@@ -61,16 +81,22 @@ class Compose(TransformerBase):
         self._transforms.insert(index, transform)
 
 
-class ComposeWithMode(Compose):
+class ComposeWithMode(Compose, TransformerMode):
     def set_train_mode(self) -> None:
         for transform in self._transforms:
             if isinstance(transform, TransformerWithMode):
-                transform.train_mode()
+                transform.set_train_mode()
 
     def set_eval_mode(self) -> None:
         for transform in self._transforms:
             if isinstance(transform, TransformerWithMode):
-                transform.eval_mode()
+                transform.set_eval_mode()
+
+    def is_train_mode(self) -> bool:
+        return all(tf.is_train_mode() for tf in self._transforms if isinstance(tf, TransformerMode))
+
+    def is_eval_mode(self) -> bool:
+        return all(tf.is_eval_mode() for tf in self._transforms if isinstance(tf, TransformerMode))
 
 
 class NoTransform(TransformerBase):
