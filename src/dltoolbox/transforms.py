@@ -225,10 +225,70 @@ class RandomCrop(TransformerWithMode):
 
         if self.is_eval_mode():
             # perform a center crop in eval mode
-            i = h - self._th + 1 // 2
-            j = w - self._tw + 1 // 2
+            i = h - (self._th + 1) // 2
+            j = w - (self._tw + 1) // 2
             return x[..., i:i + self._th, j:j + self._tw]
         else:
             i = np.random.randint(0, h - self._th + 1)
             j = np.random.randint(0, w - self._tw + 1)
             return x[..., i:i + self._th, j:j + self._tw]
+
+
+class RandomPatchesInGrid(TransformerWithMode):
+    """
+    Extract patches from a grid of the given image. The input is expected to have shape [..., H, W].
+    Creates a new dimension for the resulting patches [..., N, size[0], size[1]].
+    """
+
+    def __init__(self,
+                 size: Union[int, Tuple[int, int]],  # path size (height, width)
+                 grid: Tuple[int, int] = (1, 1)  # grid layout (rows, columns)
+                 ) -> None:
+        super().__init__()
+        self._th, self._tw = size if isinstance(size, tuple) else (size, size)
+        self._rows, self._cols = grid
+
+    def _make_grid(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        *other_dims, h, w = x.shape
+        if h // self._th < self._rows or w // self._tw < self._cols:
+            raise ValueError(f"input of shape {x.shape} cannot be reshaped into a {self._rows}x{self._cols} grid "
+                             f"with cells of at least size ({self._th}, {self._tw})")
+
+        # compute the cell height and width
+        cell_h = h // self._rows
+        cell_w = h // self._cols
+
+        # compute trimmed size to fit the grid
+        trimmed_h = self._rows * cell_h
+        trimmed_w = self._cols * cell_w
+        x = x[..., :trimmed_h, :trimmed_w]
+
+        # reshape into (..., rows, cols, cell_height, cell_width)
+        return (x[..., :self._rows * cell_h, :self._cols * cell_w]
+                .reshape(*other_dims, self._rows, cell_h, self._cols, cell_w)
+                .swapaxes(-3, -2))
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        x_grid = self._make_grid(x)
+
+        x_patches = []
+        for row in range(self._rows):
+            for col in range(self._cols):
+                cell_ij = x_grid[..., row, col, :, :]
+                cell_h, cell_w = cell_ij.shape[-2:]
+
+                if self.is_eval_mode():
+                    # select the center in eval mode
+                    i = (cell_h - self._th + 1) // 2
+                    j = (cell_w - self._tw + 1) // 2
+                    x_patches.append(cell_ij[..., i:i + self._th, j:j + self._tw])
+                else:
+                    # select a random crop of the grid cell
+                    i = np.random.randint(0, cell_h - self._th + 1)
+                    j = np.random.randint(0, cell_w - self._tw + 1)
+                    x_patches.append(cell_ij[..., i:i + self._th, j:j + self._tw])
+
+        if isinstance(x_grid, np.ndarray):
+            return np.stack(x_patches, axis=-3)
+        elif isinstance(x_grid, torch.Tensor):
+            return torch.stack(x_patches, dim=-3)
