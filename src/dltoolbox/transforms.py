@@ -1,7 +1,10 @@
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterable, List, Optional, Self, Tuple, Union
+
+from dltoolbox.normalization import WelfordEstimator
+from dltoolbox.utils import inverse_permutation
 
 Transformer = Callable[
     [Union[np.ndarray, torch.Tensor, Dict[str, Union[np.ndarray, torch.Tensor]]]],
@@ -180,12 +183,30 @@ class Permute(TransformerBase):
 class Normalize(TransformerBase):
     """Normalize using the mean and standard deviation. Supports broadcasting to a common shape."""
 
-    def __init__(self, mean: Union[float, np.ndarray, torch.Tensor], std: Union[float, np.ndarray, torch.Tensor]):
+    @classmethod
+    def from_welford(cls, welford: WelfordEstimator) -> Self:
+        mean, std, permute = welford.finalize(dtype=torch.float32)
+        return cls(mean, std, permute)
+
+    def __init__(self,
+                 mean: Union[float, np.ndarray, torch.Tensor],
+                 std: Union[float, np.ndarray, torch.Tensor],
+                 permute: Optional[Tuple[int, ...]] = None
+                 ) -> None:
         self._mean = mean
         self._std = std
+        self._permute = permute
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
-        return (x - self._mean) / self._std
+        if self._permute is not None:
+            x = torch.permute(x, self._permute)
+
+        x = (x - self._mean) / self._std
+
+        if self._permute is not None:
+            x = torch.permute(x, inverse_permutation(self._permute))  # undo permute
+
+        return x
 
 
 class RandomCrop(TransformerWithMode):
@@ -202,7 +223,7 @@ class RandomCrop(TransformerWithMode):
         if h == self._th and w == self._tw:
             return x
 
-        if self.is_eval():
+        if self.is_eval_mode():
             # perform a center crop in eval mode
             i = h - self._th + 1 // 2
             j = w - self._tw + 1 // 2

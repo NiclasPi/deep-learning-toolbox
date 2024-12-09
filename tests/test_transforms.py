@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 import torch
-from typing import Literal, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
-from dltoolbox.transforms import *
+import dltoolbox.transforms as tfs
 
 
 def create_input_sample(backend: Literal["numpy", "torch"],
@@ -40,7 +40,7 @@ class TestTransforms:
     def test_dict_create(self) -> None:
         x = create_input_sample(backend="numpy", shape=(10, 10))
 
-        tf = DictTransformCreate({"one": NoTransform(), "two": ToTensor()})
+        tf = tfs.DictTransformCreate({"one": tfs.NoTransform(), "two": tfs.ToTensor()})
         y = tf(x)
 
         assert "one" in y and isinstance(y["one"], np.ndarray)
@@ -49,13 +49,13 @@ class TestTransforms:
     def test_dict_clone(self) -> None:
         x = {"one": create_input_sample(backend="numpy", shape=(10, 10), fill="zeros")}
 
-        tf = DictTransformClone("one", "two")
+        tf = tfs.DictTransformClone("one", "two")
         y = tf(x)
 
         x["one"][0, :] = 1 # default clone is deep copy
         assert "two" in y and not np.any(y["two"] == 1)
 
-        tf = DictTransformClone("one", "two", shallow=True)
+        tf = tfs.DictTransformClone("one", "two", shallow=True)
         z = tf(x)
 
         x["one"][1, :] = 2
@@ -65,12 +65,12 @@ class TestTransforms:
     def test_dict_apply(self) -> None:
         x = {"one": create_input_sample(backend="numpy", shape=(10, 10))}
 
-        tf = DictTransformApply("one", ToTensor())
+        tf = tfs.DictTransformApply("one", tfs.ToTensor())
         y = tf(x)
 
         assert "one" in y and isinstance(y["one"], torch.Tensor)
 
-        tf = DictTransformApply("two", ToTensor())
+        tf = tfs.DictTransformApply("two", tfs.ToTensor())
         with pytest.raises(KeyError):
             tf(x)
 
@@ -79,7 +79,7 @@ class TestTransforms:
     def test_permute(self, backend: Literal["numpy", "torch"], dims: Tuple[int, ...]) -> None:
         x = create_input_sample(backend, shape=(2, 4, 6, 8, 10))
 
-        tf = Permute(dims)
+        tf = tfs.Permute(dims)
         y = tf(x)
 
         for k in range(len(y.shape)):
@@ -89,10 +89,29 @@ class TestTransforms:
     def test_normalize(self, backend: Literal["numpy", "torch"]) -> None:
         x = create_input_sample(backend, shape=(10, 10), fill=2)
 
-        tf = Normalize(mean=1.0, std=0.5)
+        tf = tfs.Normalize(mean=1.0, std=0.5)
         y = tf(x)
 
         if backend == "numpy":
             assert np.allclose(y, 2)
         else:
             assert torch.isclose(y.mean(), torch.tensor([2], dtype=torch.float32))
+
+    @pytest.mark.parametrize("dim", [None, (0,), (0, 3)])
+    def test_normalize_welford(self, dim) -> None:
+        dataset = create_input_sample(backend="torch", shape=(25, 128, 128, 3))
+
+        welford = tfs.WelfordEstimator(dim=dim)
+        welford.update(dataset)
+
+        x = dataset[0]
+        tf = tfs.Normalize.from_welford(welford)
+        y = tf(x)
+
+        mean, std = torch.mean(dataset, dim=dim), torch.std(dataset, dim=dim)
+
+        if tf._permute is not None:
+            x = torch.permute(x, tf._permute)
+            y = torch.permute(y, tf._permute)
+
+        assert torch.allclose(y, (x - mean) / std, rtol=1e-2, atol=1e-1)
