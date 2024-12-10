@@ -98,7 +98,7 @@ class TestTransforms:
             assert torch.isclose(y.mean(), torch.tensor([2], dtype=torch.float32))
 
     @pytest.mark.parametrize("dim", [None, (0,), (0, 3)])
-    def test_normalize_welford(self, dim) -> None:
+    def test_normalize_welford(self, dim: Tuple[int, ...]) -> None:
         dataset = create_input_sample(backend="torch", shape=(25, 128, 128, 3))
 
         welford = tfs.WelfordEstimator(dim=dim)
@@ -115,3 +115,13 @@ class TestTransforms:
             y = torch.permute(y, tf._permute)
 
         assert torch.allclose(y, (x - mean) / std, rtol=1e-2, atol=1e-1)
+
+    @pytest.mark.parametrize("dim", [(0,), (1,), (0, 2)])
+    def test_fft(self, dim: Tuple[int, ...]) -> None:
+        x = create_input_sample("numpy", shape=(3, 128, 128))
+
+        tf = tfs.FFT(dim=dim)
+        y = tf(x)
+        z = tf(torch.from_numpy(x))
+
+        assert torch.allclose(torch.from_numpy(y), z, rtol=1e-3, atol=1e-5)

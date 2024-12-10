@@ -3,6 +3,7 @@ numpy
 pillow
 psutil
 pytest
+scipy
 torch
 torchaudio
 torchvision
