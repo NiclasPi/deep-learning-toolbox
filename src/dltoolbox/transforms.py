@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
+from math import sqrt
 from typing import Callable, Dict, Iterable, List, Optional, Self, Tuple, Union
 from scipy.fft import dctn
 
@@ -243,11 +244,23 @@ class RandomPatchesInGrid(TransformerWithMode):
 
     def __init__(self,
                  size: Union[int, Tuple[int, int]],  # path size (height, width)
-                 grid: Tuple[int, int] = (1, 1)  # grid layout (rows, columns)
+                 grid: Union[int, Tuple[int, int]],  # grid layout (rows, columns)
                  ) -> None:
         super().__init__()
         self._th, self._tw = size if isinstance(size, tuple) else (size, size)
-        self._rows, self._cols = grid
+        self._rows, self._cols = self._compute_grid_layout(grid)
+
+    @staticmethod
+    def _compute_grid_layout(grid: Union[int, Tuple[int, int]]) -> Tuple[int, int]:
+        if isinstance(grid, int):
+            # start from the largest possible factor near the square root of n
+            for rows in range(int(sqrt(grid)), 0, -1):
+                if grid % rows == 0:
+                    columns = grid // rows
+                    return rows, columns
+            return 1, grid  # fallback for cases where n = 1
+        else:
+            return grid
 
     def _make_grid(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         *other_dims, h, w = x.shape
