@@ -308,6 +308,68 @@ class RandomPatchesInGrid(TransformerWithMode):
             return torch.stack(x_patches, dim=-3)
 
 
+class RandomFlip(TransformerWithMode):
+    """
+    Flip dimensions with given probabilities.
+    The probability for a dimension to be flipped can be set individually for every dimension and defaults to 0.5.
+    """
+
+    def __init__(self, dim: Tuple[int, ...], prob: Union[float, Tuple[...]] = 0.5) -> None:
+        super().__init__()
+        self._dim = dim
+        if isinstance(prob, tuple):
+            if len(prob) != len(dim):
+                raise ValueError("tuples for dimensions and probabilities must have same length")
+        elif isinstance(prob, float):
+            prob = tuple(prob for _ in range(len(dim)))
+        self._prob = np.array(prob, dtype=np.float64)
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if self.is_eval_mode():
+            return x
+
+        # uniform distribution over [0, 1)
+        dim_chosen = np.random.rand(len(self._dim)) <= self._prob
+        dim_to_flip = tuple(d for i, d in enumerate(self._dim) if dim_chosen[i])
+
+        if isinstance(x, np.ndarray):
+            return np.flip(x, dim_to_flip)
+        elif isinstance(x, torch.Tensor):
+            return torch.flip(x, dim_to_flip)
+        else:
+            raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
+
+
+class RandomNoise(TransformerWithMode):
+    """
+    Add random noise to the input data.
+    The random noise is taken from a normal distribution with std=1, then normalized to [-1, 1], and finally scaled.
+    """
+
+    def __init__(self, dim: Tuple[int, ...], scale: float = 1.0) -> None:
+        super().__init__()
+        self._dim = dim
+        self._scale = scale
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if self.is_eval_mode():
+            return x
+
+        size = tuple(x.shape[d] for d in self._dim)
+        noise = np.random.normal(0, 1, size)  # mean=0, std=1
+        noise = np.interp(noise, (noise.min(), noise.max()), (-1, 1))  # normalize to [-1, 1]
+        noise *= self._scale
+
+        if isinstance(x, np.ndarray):
+            noise = noise.astype(x.dtype)
+            return x + noise
+        elif isinstance(x, torch.Tensor):
+            noise = torch.from_numpy(noise).to(x.dtype)
+            return x + noise
+        else:
+            raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
+
+
 class FFT(TransformerBase):
     """Compute the Discrete Fourier Transform on k input dimensions using the Fast Fourier Transform (FFT) algorithm."""
 

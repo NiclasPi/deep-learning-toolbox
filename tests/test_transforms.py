@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 import torch
-from typing import Literal, Optional, Tuple, Union
+from typing import Literal, Tuple, Union
 
 import dltoolbox.transforms as tfs
 
@@ -52,7 +52,7 @@ class TestTransforms:
         tf = tfs.DictTransformClone("one", "two")
         y = tf(x)
 
-        x["one"][0, :] = 1 # default clone is deep copy
+        x["one"][0, :] = 1  # default clone is deep copy
         assert "two" in y and not np.any(y["two"] == 1)
 
         tf = tfs.DictTransformClone("one", "two", shallow=True)
@@ -60,7 +60,6 @@ class TestTransforms:
 
         x["one"][1, :] = 2
         assert "two" in y and np.any(y["two"] == 1)
-
 
     def test_dict_apply(self) -> None:
         x = {"one": create_input_sample(backend="numpy", shape=(10, 10))}
@@ -115,6 +114,43 @@ class TestTransforms:
             y = torch.permute(y, tf._permute)
 
         assert torch.allclose(y, (x - mean) / std, rtol=1e-2, atol=1e-1)
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("dim", [(0,), (-1,), (0, 1)])
+    @pytest.mark.parametrize("prob", [0.0, 0.5, 1.0])
+    def test_random_flip(self, backend: Literal["numpy", "torch"], dim: Tuple[int, ...], prob: float) -> None:
+        x = create_input_sample(backend, shape=(10, 10))
+
+        tf = tfs.RandomFlip(dim=dim, prob=prob)
+        y = tf(x)
+        assert x.shape == y.shape
+
+        if prob == 0.0:
+            # no dimension should be flipped
+            assert np.array_equal(y, x) if backend == "numpy" else torch.equal(y, x)
+        elif prob == 1.0:
+            # all dimensions should be flipped
+            assert np.array_equal(y, np.flip(x, dim)) if backend == "numpy" else torch.equal(y, torch.flip(x, dim))
+
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("dim", [(0,), (-1,), (0, 1)])
+    def test_random_noise(self, backend: Literal["numpy", "torch"], dim: Tuple[int, ...]) -> None:
+        x = create_input_sample(backend, shape=(10, 10))
+
+        tf = tfs.RandomNoise(dim=dim)
+        y = tf(x)
+        assert x.shape == y.shape
+        assert x.dtype == y.dtype
+
+        if backend == "numpy":
+            x_uint8 = (x * 255).astype(np.uint8)
+            y_uint8 = tf(x_uint8)
+            assert y_uint8.dtype == np.uint8
+        elif backend == "torch":
+            x_uint8 = x.to(torch.uint8)
+            y_uint8 = tf(x_uint8)
+            assert y_uint8.dtype == torch.uint8
 
     @pytest.mark.parametrize("dim", [(0,), (1,), (0, 2)])
     def test_fft(self, dim: Tuple[int, ...]) -> None:
