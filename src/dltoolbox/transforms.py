@@ -155,6 +155,31 @@ class DictTransformClone:
         return x
 
 
+class RandomChoices(TransformerWithMode):
+    """
+    Randomly chose one transform from a collection of transforms based on its probability.
+    """
+
+    def __init__(self, choices: Dict[Transformer, float]):
+        super().__init__()
+        self._transforms: Optional[Dict[int, Transformer]] = None
+        if len(choices) > 0:
+            self._transforms = {id(k): k for k in choices.keys()}
+            # a-array for np.random.choice
+            self._a = np.array(list(choices.keys()))
+            # normalize the sum of probabilities to 1.0
+            alpha = 1.0 / sum(choices.values())
+            # p-array for np.random.choice
+            self._p = np.array(list(alpha * v for v in choices.values()))
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if self.is_eval_mode() or self._transforms is None:
+            return x
+
+        chosen_id = int(np.random.choice(self._a, p=self._p)[0])
+        return self._transforms[chosen_id](x)
+
+
 class DictTransformApply:
     """Apply transform on one named input."""
 
