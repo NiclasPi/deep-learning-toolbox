@@ -5,7 +5,7 @@ from math import sqrt
 from typing import Callable, Dict, Iterable, List, Optional, Self, Tuple, Union
 from scipy.fft import dctn
 
-from dltoolbox.normalization import WelfordEstimator
+from dltoolbox.normalization import Normalization, WelfordEstimator
 from dltoolbox.utils import inverse_permutation
 
 Transformer = Callable[
@@ -211,6 +211,17 @@ class Normalize(TransformerBase):
     """Normalize using the mean and standard deviation. Supports broadcasting to a common shape."""
 
     @classmethod
+    def from_normalization(cls, n: Normalization, device: torch.device = torch.device("cpu")) -> Self:
+        if isinstance(n.mean, torch.Tensor):  # if mean is tensor, then std should also be a tensor
+            return cls(n.mean.to(dtype=torch.float32, device=device),
+                       n.std.to(dtype=torch.float32, device=device),
+                       n.perm)
+        else:
+            return cls(n.mean,
+                       n.std,
+                       n.perm)
+
+    @classmethod
     def from_welford(cls, welford: WelfordEstimator, device: torch.device = torch.device("cpu")) -> Self:
         mean, std, permute = welford.finalize(dtype=torch.float32, device=device)
         return cls(mean, std, permute)
@@ -224,14 +235,28 @@ class Normalize(TransformerBase):
         self._std = std
         self._permute = permute
 
+    def get_normalization(self, device: Optional[str | torch.device] = None) -> Normalization:
+        if isinstance(self._mean, torch.Tensor):  # if mean is tensor, then std should also be a tensor
+            return Normalization(self._mean.to(device=device), self._std.to(device=device), self._permute)
+        else:
+            return Normalization(self._mean, self._std, self._permute)
+
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         if self._permute is not None:
-            x = torch.permute(x, self._permute)
+            if isinstance(x, np.ndarray):
+                x = np.transpose(x, self._permute)
+            elif isinstance(x, torch.Tensor):
+                x = torch.permute(x, self._permute)
+            else:
+                raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
 
         x = (x - self._mean) / self._std
 
         if self._permute is not None:
-            x = torch.permute(x, inverse_permutation(self._permute))  # undo permute
+            if isinstance(x, np.ndarray):
+                x = np.transpose(x, inverse_permutation(self._permute))  # undo permute
+            elif isinstance(x, torch.Tensor):
+                x = torch.permute(x, inverse_permutation(self._permute))  # undo permute
 
         return x
 

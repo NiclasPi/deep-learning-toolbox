@@ -86,18 +86,39 @@ class TestTransforms:
 
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     def test_normalize(self, backend: Literal["numpy", "torch"]) -> None:
-        x = create_input_sample(backend, shape=(10, 10), fill=2)
+        x = create_input_sample(backend, shape=(10, 10))
 
         tf = tfs.Normalize(mean=1.0, std=0.5)
         y = tf(x)
 
         if backend == "numpy":
-            assert np.allclose(y, 2)
+            assert np.allclose(y, (x - 1.0) / 0.5)
         else:
-            assert torch.isclose(y.mean(), torch.tensor([2], dtype=torch.float32))
+            assert torch.allclose(y, (x - 1.0) / 0.5)
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    def test_normalize_from_normalization_dataclass(self, backend: Literal["numpy", "torch"]) -> None:
+        from dltoolbox.normalization import Normalization
+        normalization: Normalization
+
+        mean = np.full((3, 16, 16), fill_value=1.1, dtype=np.float32)
+        std = np.full((3, 16, 16), fill_value=0.1, dtype=np.float32)
+        if backend == "numpy":
+            normalization = Normalization(mean, std)
+        else:
+            normalization = Normalization(torch.from_numpy(mean), torch.from_numpy(std))
+
+        x = create_input_sample(backend, shape=(3, 16, 16))
+        tf = tfs.Normalize.from_normalization(normalization)
+        y = tf(x)
+
+        if backend == "numpy":
+            assert np.allclose(y, (x - mean) / std)
+        else:
+            assert torch.allclose(y, (x - torch.from_numpy(mean)) / torch.from_numpy(std))
 
     @pytest.mark.parametrize("dim", [None, (0,), (0, 3)])
-    def test_normalize_welford(self, dim: Tuple[int, ...]) -> None:
+    def test_normalize_from_welford_class(self, dim: Tuple[int, ...]) -> None:
         dataset = create_input_sample(backend="torch", shape=(25, 128, 128, 3))
 
         welford = tfs.WelfordEstimator(dim=dim)
@@ -131,7 +152,6 @@ class TestTransforms:
         elif prob == 1.0:
             # all dimensions should be flipped
             assert np.array_equal(y, np.flip(x, dim)) if backend == "numpy" else torch.equal(y, torch.flip(x, dim))
-
 
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     @pytest.mark.parametrize("dim", [(0,), (-1,), (0, 1)])

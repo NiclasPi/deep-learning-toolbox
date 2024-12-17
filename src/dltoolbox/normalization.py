@@ -1,5 +1,14 @@
+import numpy as np
 import torch
-from typing import Optional, Tuple
+from dataclasses import dataclass
+from typing import Optional, Tuple, Union
+
+
+@dataclass
+class Normalization:
+    mean: Union[float, np.ndarray, torch.Tensor]
+    std: Union[float, np.ndarray, torch.Tensor]
+    perm: Optional[Tuple[int, ...]] = None
 
 
 class WelfordEstimator:
