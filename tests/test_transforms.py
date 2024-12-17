@@ -165,12 +165,22 @@ class TestTransforms:
 
         if backend == "numpy":
             x_uint8 = (x * 255).astype(np.uint8)
+            x_uint8[0, 0] = 0
+            x_uint8[-1, -1] = 255
             y_uint8 = tf(x_uint8)
+            # check if output type is input type
             assert y_uint8.dtype == np.uint8
+            # check if no overflows occurred (for scale=1.0)
+            assert not np.any(np.abs(x_uint8.astype(np.int16) - y_uint8.astype(np.int16)) > 1)
         elif backend == "torch":
-            x_uint8 = x.to(torch.uint8)
+            x_uint8 = (x * 255).to(torch.uint8)
+            x_uint8[0, 0] = 0
+            x_uint8[-1, -1] = 255
             y_uint8 = tf(x_uint8)
+            # check if output type is input type
             assert y_uint8.dtype == torch.uint8
+            # check if no overflows occurred (for scale=1.0)
+            assert not torch.any(torch.abs(x_uint8.to(torch.int16) - y_uint8.to(torch.int16)) > 1)
 
     @pytest.mark.parametrize("dim", [(0,), (1,), (0, 2)])
     def test_fft(self, dim: Tuple[int, ...]) -> None:

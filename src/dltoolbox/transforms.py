@@ -166,7 +166,7 @@ class RandomChoices(TransformerWithMode):
         if len(choices) > 0:
             self._transforms = {id(k): k for k in choices.keys()}
             # a-array for np.random.choice
-            self._a = np.array(list(choices.keys()))
+            self._a = np.array(list(self._transforms.keys()))
             # normalize the sum of probabilities to 1.0
             alpha = 1.0 / sum(choices.values())
             # p-array for np.random.choice
@@ -176,7 +176,7 @@ class RandomChoices(TransformerWithMode):
         if self.is_eval_mode() or self._transforms is None:
             return x
 
-        chosen_id = int(np.random.choice(self._a, p=self._p)[0])
+        chosen_id = int(np.random.choice(self._a, p=self._p))
         return self._transforms[chosen_id](x)
 
 
@@ -428,16 +428,26 @@ class RandomNoise(TransformerWithMode):
             return x
 
         size = tuple(x.shape[d] for d in self._dim)
-        noise = np.random.normal(0, 1, size)  # mean=0, std=1
+        noise = np.random.normal(0, 1, size)  # mean=0, std=1, dtype=float64
         noise = np.interp(noise, (noise.min(), noise.max()), (-1, 1))  # normalize to [-1, 1]
         noise *= self._scale
 
         if isinstance(x, np.ndarray):
-            noise = noise.astype(x.dtype)
-            return x + noise
+            if issubclass(x.dtype.type, np.integer):
+                # array has integer dtype and needs careful boundary handling
+                dtype_info = np.iinfo(x.dtype)
+                return np.clip(x.astype(np.float64) + noise,
+                               a_min=dtype_info.min, a_max=dtype_info.max).astype(x.dtype)
+            else:
+                return x + noise.astype(x.dtype)
         elif isinstance(x, torch.Tensor):
-            noise = torch.from_numpy(noise).to(x.dtype)
-            return x + noise
+            if not torch.is_floating_point(x) and not torch.is_complex(x):
+                # tensor has integer dtype and needs careful boundary handling
+                dtype_info = np.iinfo(np.dtype(str(x.dtype).lstrip("torch.")))
+                return torch.clamp(x.to(torch.float64) + torch.from_numpy(noise),
+                                   min=dtype_info.min, max=dtype_info.max).to(x.dtype)
+            else:
+                return x + torch.from_numpy(noise).to(x.dtype)
         else:
             raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
 
