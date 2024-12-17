@@ -390,6 +390,28 @@ class RandomFlip(TransformerWithMode):
             raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
 
 
+class RandomRotate90(TransformerWithMode):
+    """
+    Rotate the input along 2 dimensions by k*90 degrees with a random k = {0, 1, 2, 3}.
+    """
+
+    def __init__(self, dim: Tuple[int, int]):
+        super().__init__()
+        self._dim = dim
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if self.is_eval_mode():
+            return x
+
+        k = np.random.randint(0, 4)
+        if isinstance(x, np.ndarray):
+            return np.rot90(x, k, axes=self._dim)
+        elif isinstance(x, torch.Tensor):
+            return torch.rot90(x, k, dims=self._dim)
+        else:
+            raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
+
+
 class RandomNoise(TransformerWithMode):
     """
     Add random noise to the input data.
