@@ -4,6 +4,7 @@ import torch
 from typing import Literal, Tuple, Union
 
 import dltoolbox.transforms as tfs
+from dltoolbox.normalization import WelfordEstimator
 
 
 def create_input_sample(backend: Literal["numpy", "torch"],
@@ -121,7 +122,7 @@ class TestTransforms:
     def test_normalize_from_welford_class(self, dim: Tuple[int, ...]) -> None:
         dataset = create_input_sample(backend="torch", shape=(25, 128, 128, 3))
 
-        welford = tfs.WelfordEstimator(dim=dim)
+        welford = WelfordEstimator(dim=dim)
         welford.update(dataset)
 
         x = dataset[0]
