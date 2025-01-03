@@ -56,7 +56,7 @@ class DCT(TransformerBase):
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         if isinstance(x, np.ndarray):
-            dct = dctn(x, axis=self.dim)
+            dct = dctn(x, axes=self.dim)
             if self.log:
                 dct = np.log(np.abs(dct) + self.eps)
             return dct
