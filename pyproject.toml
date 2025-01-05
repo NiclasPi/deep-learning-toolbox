@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dltoolbox"
+version = "0.0.1"
+description = "Deep Learning Toolbox"
+#license = "LICENSE"
+#readme = "README.md"
+authors = [
+  { name = "Niclas Pillath", email = "npillath@stimlabs.dev" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = [
+    "deep",
+    "learning",
+    "toolbox",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "h5py",
+    "numpy",
+    "pillow",
+    "psutil",
+    "scipy",
+    "torch>=2.1.2",
+    "torchaudio",
+    "torchvision",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "nox"]
+test = ["pytest", "nox"]
+
+[tool.isort]
+py_version=311
+line_length=120
+force_alphabetical_sort_within_sections=true
+
+[tool.black]
+line_length=120
