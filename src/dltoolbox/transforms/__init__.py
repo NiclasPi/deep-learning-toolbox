@@ -12,7 +12,13 @@ from .core import (
     DictTransformApply,
     RandomChoices,
     Permute,
+    Reshape,
+    Pad,
     Normalize,
+)
+
+from .audio import (
+    RandomSlice
 )
 
 from .frequency import (

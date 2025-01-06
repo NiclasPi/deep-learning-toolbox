@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Iterable, List, Optional, Self, Tuple, Union
+from itertools import chain
+from typing import Callable, Dict, Iterable, List, Literal, Optional, Self, Tuple, Union
 
 from dltoolbox.normalization import Normalization, WelfordEstimator
 from dltoolbox.utils import inverse_permutation
@@ -191,14 +192,81 @@ class RandomChoices(TransformerWithMode):
 class Permute(TransformerBase):
     """Permute dimensions of the given input."""
 
-    def __init__(self, dims: Tuple[int, ...]):
-        self.dims = dims
+    def __init__(self, dim: Tuple[int, ...]):
+        self._dim = dim
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         if isinstance(x, np.ndarray):
-            return np.transpose(x, self.dims)
+            return np.transpose(x, self._dim)
         elif isinstance(x, torch.Tensor):
-            return torch.permute(x, self.dims)
+            return torch.permute(x, self._dim)
+        else:
+            raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
+
+
+class Reshape(TransformerBase):
+    """Reshape the given input."""
+
+    def __init__(self, shape: Tuple[int, ...]):
+        self._shape = shape
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if isinstance(x, np.ndarray):
+            return np.reshape(x, self._shape)
+        elif isinstance(x, torch.Tensor):
+            return torch.reshape(x, self._shape)
+        else:
+            raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
+
+
+class Pad(TransformerBase):
+    """Pad the given input along given dimensions."""
+
+    def __init__(self,
+                 shape: Tuple[int, ...],
+                 dim: Tuple[int, ...],
+                 mode: Literal["constant", "reflect", "replicate", "circular"] = "constant",
+                 value: Optional[float] = 0
+                 ) -> None:
+        if len(shape) != len(dim):
+            raise ValueError(f"shape and dim tuples must have the same length")
+        if mode == "constant" and value is None:
+            raise ValueError("value must be provided for 'constant' padding mode")
+
+        self._shape = shape
+        self._dim = dim
+        self._mode = mode
+        self._value = value
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        padding = [(0, 0)] * x.ndim
+
+        for dim, shape in zip(self._dim, self._shape):
+            if x.shape[dim] < shape:
+                missing = shape - x.shape[dim]
+                padding[dim] = (missing // 2, (missing + 1) // 2)
+
+        if isinstance(x, np.ndarray):
+            # conditionally build kwargs because Numpy does not allow optional arguments to be None
+            kwargs = {}
+            if self._mode == "constant":
+                kwargs["mode"] = "constant"
+                kwargs["constant_values"] = self._value
+            elif self._mode == "reflect":
+                kwargs["mode"] = "reflect"
+            elif self._mode == "replicate":
+                kwargs["mode"] = "edge"
+            elif self._mode == "circular":
+                kwargs["mode"] = "wrap"
+
+            return np.pad(x, padding, **kwargs)
+        elif isinstance(x, torch.Tensor):
+            # for PyTorch, the padding type requires flattening to tuple of ints and the order needs to be reversed
+            padding = tuple(chain.from_iterable(padding[::-1]))
+
+            # TODO: need to manually wrap around more than once, if needed for circular mode
+            # see: https://github.com/v0lta/PyTorch-Wavelet-Toolbox/pull/84
+            return torch.nn.functional.pad(x, padding, mode=self._mode, value=self._value)
         else:
             raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
 

@@ -5,7 +5,7 @@ from io import BytesIO
 from math import sqrt
 from PIL import Image
 from typing import Tuple, Union
-from scipy.ndimage import convolve, gaussian_filter
+from scipy.ndimage import gaussian_filter
 
 from .core import TransformerBase, TransformerWithMode
 from ._image_utils_np import adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue

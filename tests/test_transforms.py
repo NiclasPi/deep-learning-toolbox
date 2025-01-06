@@ -86,6 +86,48 @@ class TestTransforms:
             assert y.shape[k] == x.shape[dims[k]]
 
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("shape", [(10, 3, 256), (-1, 24, 32), (10, 2, -1, 32)])
+    def test_reshape(self, backend: Literal["numpy", "torch"], shape: Tuple[int, ...]) -> None:
+        x = create_input_sample(backend, shape=(10, 3, 16, 16))
+
+        tf = tfs.Reshape(shape=shape)
+        y = tf(x)
+
+        for d, s in enumerate(shape):
+            if s > 0:
+                assert y.shape[d] == s
+
+    @pytest.mark.parametrize("shape", [(16,), (16, 16)])
+    @pytest.mark.parametrize("dim", [(0,), (1,), (-1,), (2, 1), (-2, -1), (1, -1)])
+    @pytest.mark.parametrize("mode", ["constant", "reflect"])
+    def test_pad(self, shape: Tuple[int, ...], dim: Tuple[int, ...], mode: Literal["constant", "reflect"]) -> None:
+        if len(shape) != len(dim):
+            with pytest.raises(ValueError):
+                tfs.Pad(shape=shape, dim=dim, mode=mode)
+        elif mode != "constant":
+            # "Only 2D, 3D, 4D, 5D padding with non-constant padding are supported for now"
+            # Constant padding is implemented for arbitrary dimensions. Circular, replicate and reflection padding are
+            # implemented for padding the last 3 dimensions of a 4D or 5D input tensor, the last 2 dimensions of a 3D
+            # or 4D input tensor, or the last dimension of a 2D or 3D input tensor.
+            #
+            # None of the test cases match a valid configuration because we always pad all dimensions of the 3D input
+            # tensor (even if some dimensions get (0, 0) padding, it is still counted as padding)
+            with pytest.raises(NotImplementedError):
+                tf = tfs.Pad(shape=shape, dim=dim, mode=mode)
+                tf(torch.zeros((3, 8, 13)))
+        else:
+            x = create_input_sample("numpy", shape=(3, 8, 13))
+
+            tf = tfs.Pad(shape=shape, dim=dim, mode=mode)
+            y_np = tf(x)
+            y_pt = tf(torch.from_numpy(x))
+
+            for s, d in zip(shape, dim):
+                assert y_np.shape[d] == y_pt.shape[d] == s
+
+            assert np.allclose(y_np, y_pt.numpy())
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
     def test_normalize(self, backend: Literal["numpy", "torch"]) -> None:
         x = create_input_sample(backend, shape=(10, 10))
 
@@ -136,6 +178,17 @@ class TestTransforms:
             y = torch.permute(y, tf._permute)
 
         assert torch.allclose(y, (x - mean) / std, rtol=1e-2, atol=1e-1)
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("size", [16, 24])
+    @pytest.mark.parametrize("dim", [1, 2, -1, -2])
+    def test_random_slice(self, backend: Literal["numpy", "torch"], size: int, dim: int) -> None:
+        x = create_input_sample(backend, shape=(1, 32, 32))
+
+        tf = tfs.RandomSlice(size=size, dim=dim)
+        y = tf(x)
+
+        assert y.shape[dim] == size
 
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     @pytest.mark.parametrize("dim", [(0,), (-1,), (0, 1)])
