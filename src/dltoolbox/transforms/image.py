@@ -70,7 +70,7 @@ class RandomPatchesInGrid(TransformerWithMode):
 
         # compute the cell height and width
         cell_h = h // self._rows
-        cell_w = h // self._cols
+        cell_w = w // self._cols
 
         # compute trimmed size to fit the grid
         trimmed_h = self._rows * cell_h
