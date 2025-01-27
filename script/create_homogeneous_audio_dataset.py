@@ -211,6 +211,9 @@ if __name__ == "__main__":
     if args.random_order:
         random.seed(args.seed)
         random.shuffle(file_paths)
+    else:
+        # ensure deterministic order by sorting in lexicographic order
+        file_paths = sorted(file_paths)
     train_files = file_paths[:train_size]
     valid_files = file_paths[train_size:train_size + valid_size]
     test_files = file_paths[train_size + valid_size:train_size + valid_size + test_size]
