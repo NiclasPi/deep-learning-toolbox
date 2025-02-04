@@ -72,6 +72,9 @@ class Compose(TransformerBase):
     def __len__(self) -> int:
         return len(self._transforms)
 
+    def __setitem__(self, index: int, value: Transformer):
+        self._transforms[index] = value
+
     def __getitem__(self, index: int) -> Transformer:
         return self._transforms[index]
 
