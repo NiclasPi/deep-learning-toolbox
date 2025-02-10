@@ -7,8 +7,9 @@ from PIL import Image
 from typing import Tuple, Union
 from scipy.ndimage import gaussian_filter
 
-from .core import TransformerBase, TransformerWithMode
-from ._image_utils_np import adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue
+from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
+from dltoolbox.transforms._image_utils_np import adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue
+from dltoolbox.transforms._utils import make_slices
 
 
 class RandomCrop(TransformerWithMode):
@@ -106,6 +107,8 @@ class RandomPatchesInGrid(TransformerWithMode):
             return np.stack(x_patches, axis=-3)
         elif isinstance(x_grid, torch.Tensor):
             return torch.stack(x_patches, dim=-3)
+        else:
+            raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x_grid)}")
 
 
 class RandomFlip(TransformerWithMode):
@@ -114,7 +117,7 @@ class RandomFlip(TransformerWithMode):
     The probability for a dimension to be flipped can be set individually for every dimension and defaults to 0.5.
     """
 
-    def __init__(self, dim: Tuple[int, ...], prob: Union[float, Tuple[...]] = 0.5) -> None:
+    def __init__(self, dim: Tuple[int, ...], prob: Union[float, Tuple[float, ...]] = 0.5) -> None:
         super().__init__()
         self._dim = dim
         if isinstance(prob, tuple):
@@ -160,6 +163,53 @@ class RandomRotate90(TransformerWithMode):
             return torch.rot90(x, k, dims=self._dim)
         else:
             raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
+
+
+class RandomErasing(TransformerWithMode):
+    """
+    Erase a randomly selected region with the specified fill value.
+    """
+
+    def __init__(self,
+                 dim: Tuple[int, ...],
+                 scale: Tuple[float, float] = (0.02, 0.33),
+                 ratio: Tuple[float, float] = (0.3, 3.3),
+                 value: Union[int, float, bool, complex] = 0,
+                 ) -> None:
+        super().__init__()
+        self._dim = dim
+        self._scale = scale
+        self._ratio = ratio
+        self._value = value
+
+    def _get_region_slices(self, shape: Tuple[int, ...]) -> Tuple[slice, ...]:
+        scales = np.random.uniform(low=self._scale[0], high=self._scale[1], size=len(shape))
+
+        # compute region shape
+        region = tuple(int(shape[i] * scales[i]) for i in range(len(shape)))
+
+        # compute valid start indices
+        indices = tuple(np.random.randint(0, shape[i] - region[i] + 1) for i in range(len(shape)))
+
+        # return slices for the regions
+        return tuple(slice(indices[i], indices[i] + region[i]) for i in range(len(shape)))
+
+    def _get_region_values(self, region: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if isinstance(region, np.ndarray):
+            return np.full_like(region, fill_value=self._value)
+        elif isinstance(region, torch.Tensor):
+            return torch.full_like(region, fill_value=self._value)
+        else:
+            raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(region)}")
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        # get the slices of the randomly selected region
+        region_slices = self._get_region_slices(tuple(x.shape[d] for d in self._dim))
+        # get a view into that region
+        region_view = x[make_slices(x.shape, self._dim, region_slices)]
+        # assign new values to the region
+        region_view[:] = self._get_region_values(region_view)
+        return x
 
 
 class RandomNoise(TransformerWithMode):
