@@ -31,6 +31,7 @@ from .image import (
     RandomPatchesInGrid,
     RandomFlip,
     RandomRotate90,
+    RandomErasing,
     RandomNoise,
     GaussianBlur,
     JPEGCompression,

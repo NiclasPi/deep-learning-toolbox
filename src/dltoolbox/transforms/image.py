@@ -7,9 +7,9 @@ from PIL import Image
 from typing import Tuple, Union
 from scipy.ndimage import gaussian_filter
 
-from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
-from dltoolbox.transforms._image_utils_np import adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue
-from dltoolbox.transforms._utils import make_slices
+from .core import TransformerBase, TransformerWithMode
+from ._image_utils_np import adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue
+from ._utils import make_slices
 
 
 class RandomCrop(TransformerWithMode):
@@ -173,13 +173,11 @@ class RandomErasing(TransformerWithMode):
     def __init__(self,
                  dim: Tuple[int, ...],
                  scale: Tuple[float, float] = (0.02, 0.33),
-                 ratio: Tuple[float, float] = (0.3, 3.3),
                  value: Union[int, float, bool, complex] = 0,
                  ) -> None:
         super().__init__()
         self._dim = dim
         self._scale = scale
-        self._ratio = ratio
         self._value = value
 
     def _get_region_slices(self, shape: Tuple[int, ...]) -> Tuple[slice, ...]:
