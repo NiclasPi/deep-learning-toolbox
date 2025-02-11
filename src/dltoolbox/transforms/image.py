@@ -15,9 +15,9 @@ from ._utils import make_slices
 class RandomCrop(TransformerWithMode):
     """Crop the given image at a random location. The input is expected to have shape [..., H, W]."""
 
-    def __init__(self, size: Tuple[int, int]) -> None:
+    def __init__(self, size: Union[int, Tuple[int, int]]) -> None:
         super().__init__()
-        self._th, self._tw = size
+        self._th, self._tw = size if isinstance(size, tuple) else (size, size)
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         h, w = x.shape[-2:]
@@ -28,8 +28,8 @@ class RandomCrop(TransformerWithMode):
 
         if self.is_eval_mode():
             # perform a center crop in eval mode
-            i = h - (self._th + 1) // 2
-            j = w - (self._tw + 1) // 2
+            i = (h - self._th + 1) // 2
+            j = (w - self._tw + 1) // 2
             return x[..., i:i + self._th, j:j + self._tw]
         else:
             i = np.random.randint(0, h - self._th + 1)
