@@ -121,6 +121,7 @@ class ToTensor(TransformerBase):
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
         if isinstance(x, np.ndarray):
+            x = np.ascontiguousarray(x)
             return torch.from_numpy(x).to(dtype=torch.float32, device=self._device)
         else:
             return x.to(dtype=torch.float32, device=self._device)
