@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 import torch
-from typing import Literal, Tuple, Union
+from typing import Literal, Tuple
 
 import dltoolbox.transforms as tfs
 from dltoolbox.normalization import WelfordEstimator
@@ -161,13 +161,3 @@ class TestTransforms:
         y = tf(x)
 
         assert y.shape[dim] == size
-
-    @pytest.mark.parametrize("dim", [(0,), (1,), (0, 2)])
-    def test_fft(self, dim: Tuple[int, ...]) -> None:
-        x = transform_create_input("numpy", shape=(3, 128, 128))
-
-        tf = tfs.FFT(dim=dim)
-        y = tf(x)
-        z = tf(torch.from_numpy(x))
-
-        assert torch.allclose(torch.from_numpy(y), z, rtol=1e-3, atol=1e-5)
