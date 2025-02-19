@@ -12,21 +12,27 @@ class FFT(TransformerBase):
     def __init__(
             self,
             dim: Tuple[int, ...],
-            log: bool = True,
+            shift: bool = False,
+            log: bool = False,
             eps: float = 1e-12
     ) -> None:
         self.dim = dim
+        self.shift = shift
         self.log = log
         self.eps = eps
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         if isinstance(x, np.ndarray):
             fft = np.fft.fftn(x, axes=self.dim)
+            if self.shift:
+                fft = np.fft.fftshift(fft, axes=self.dim)
             if self.log:
                 fft = np.log(np.abs(fft) + self.eps)
             return fft
         elif isinstance(x, torch.Tensor):
             fft = torch.fft.fftn(x, dim=self.dim)
+            if self.shift:
+                fft = torch.fft.fftshift(fft, dim=self.dim)
             if self.log:
                 fft = torch.log(torch.abs(fft) + self.eps)
             return fft
