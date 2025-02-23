@@ -318,7 +318,7 @@ class Normalize(TransformerBase):
             else:
                 raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
 
-        x = (x - self._mean) / self._std
+        x = (x - self._mean) / (self._std + 1e-12)
 
         if self._permute is not None:
             if isinstance(x, np.ndarray):
