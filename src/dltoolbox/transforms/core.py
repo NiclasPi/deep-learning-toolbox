@@ -91,12 +91,12 @@ class Compose(TransformerBase):
 class ComposeWithMode(Compose, TransformerMode):
     def set_train_mode(self) -> None:
         for transform in self._transforms:
-            if isinstance(transform, TransformerWithMode):
+            if isinstance(transform, TransformerMode):
                 transform.set_train_mode()
 
     def set_eval_mode(self) -> None:
         for transform in self._transforms:
-            if isinstance(transform, TransformerWithMode):
+            if isinstance(transform, TransformerMode):
                 transform.set_eval_mode()
 
     def is_train_mode(self) -> bool:
@@ -159,14 +159,15 @@ class DictTransformClone:
 
 
 class DictTransformApply:
-    """Apply transform on one named input."""
+    """Apply transform on one or multiple named inputs."""
 
-    def __init__(self, key: str, transform: Transformer):
-        self._key = key
+    def __init__(self, keys: Union[str, Iterable[str]], transform: Transformer):
+        self._keys = [keys] if isinstance(keys, str) else [key for key in keys]
         self._transform = transform
 
     def __call__(self, x: Dict[str, Union[np.ndarray, torch.Tensor]]) -> Dict[str, Union[np.ndarray, torch.Tensor]]:
-        x[self._key] = self._transform(x[self._key])
+        for key in self._keys:
+            x[key] = self._transform(x[key])
         return x
 
 
