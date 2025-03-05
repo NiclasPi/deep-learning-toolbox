@@ -70,6 +70,11 @@ class TestTransformsImage:
 
         assert x.shape == y.shape
         assert x.dtype == y.dtype
+
+        if mode == "eval":
+            assert np.array_equal(x, y) if backend == "numpy" else torch.equal(y, x)
+            return
+
         # checks for uint8
         if backend == "numpy":
             x_uint8 = (x * 256).astype(np.uint8)

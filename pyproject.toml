@@ -31,7 +31,9 @@ keywords = [
 requires-python = ">=3.11"
 dependencies = [
     "h5py",
+    "librosa",
     "numpy",
+    "opencv-python",
     "pillow",
     "psutil",
     "scipy",
