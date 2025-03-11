@@ -24,7 +24,7 @@ class RandomSlice(TransformerWithMode):
         i: int
         if self.is_eval_mode():
             # extract a centered slice in eval mode
-            i = s - (self._ts - 1) // 2
+            i = (s - self._ts - 1) // 2
         else:
             i = np.random.randint(0, s - self._ts + 1)
 
