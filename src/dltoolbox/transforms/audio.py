@@ -2,8 +2,33 @@ import numpy as np
 import torch
 from typing import Union
 
-from .core import TransformerWithMode
+from .core import TransformerBase, TransformerWithMode
 from ._utils import make_slices
+
+
+class InvertPhase(TransformerBase):
+    """Invert the phase of an audio waveform by negating its values."""
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if not (isinstance(x, np.ndarray) or isinstance(x, torch.Tensor)):
+            raise ValueError(f"expected np.ndarray or torch.Tensor, got {type(x).__name__}")
+
+        return x * -1
+
+
+class Reverse(TransformerBase):
+    """Reverse the audio waveform."""
+
+    def __init__(self, dim: int = -1) -> None:
+        self._dim = (dim,)
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if isinstance(x, np.ndarray):
+            return np.flip(x, axis=self._dim)
+        elif isinstance(x, torch.Tensor):
+            return torch.flip(x, dims=self._dim)
+        else:
+            raise ValueError(f"expected np.ndarray or torch.Tensor, got {type(x).__name__}")
 
 
 class RandomSlice(TransformerWithMode):

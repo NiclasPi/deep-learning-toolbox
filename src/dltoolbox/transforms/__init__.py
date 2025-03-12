@@ -18,7 +18,9 @@ from .core import (
 )
 
 from .audio import (
-    RandomSlice
+    InvertPhase,
+    Reverse,
+    RandomSlice,
 )
 
 from .frequency import (
