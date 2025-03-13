@@ -1,7 +1,7 @@
 h5py
 librosa
 numpy
-opencv-python
+opencv-python-headless
 pillow
 psutil
 pytest
