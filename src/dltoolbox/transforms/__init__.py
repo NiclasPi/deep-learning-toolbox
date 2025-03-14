@@ -11,15 +11,19 @@ from .core import (
     DictTransformClone,
     DictTransformApply,
     RandomChoices,
+)
+
+from .universal import (
+    Normalize,
+    Flip,
+    Pad,
     Permute,
     Reshape,
-    Pad,
-    Normalize,
 )
 
 from .audio import (
     InvertPhase,
-    Reverse,
+    RandomAttenuation,
     RandomSlice,
 )
 

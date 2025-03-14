@@ -16,19 +16,24 @@ class InvertPhase(TransformerBase):
         return x * -1
 
 
-class Reverse(TransformerBase):
-    """Reverse the audio waveform."""
+class RandomAttenuation(TransformerWithMode):
+    """Attenuate the input values by multiplying an attenuation factor."""
 
-    def __init__(self, dim: int = -1) -> None:
-        self._dim = (dim,)
+    def __init__(self, attenuation: Union[float, tuple[float, float]]) -> None:
+        super().__init__()
+        self._attenuation = attenuation
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
-        if isinstance(x, np.ndarray):
-            return np.flip(x, axis=self._dim)
-        elif isinstance(x, torch.Tensor):
-            return torch.flip(x, dims=self._dim)
+        if self.is_eval_mode():
+            return x
+
+        attenuation: float
+        if isinstance(self._attenuation, tuple):
+            attenuation = np.random.uniform(self._attenuation[0], self._attenuation[1])
         else:
-            raise ValueError(f"expected np.ndarray or torch.Tensor, got {type(x).__name__}")
+            attenuation = self._attenuation
+
+        return x * attenuation
 
 
 class RandomSlice(TransformerWithMode):
@@ -54,23 +59,3 @@ class RandomSlice(TransformerWithMode):
             i = np.random.randint(0, s - self._ts + 1)
 
         return x[make_slices(tuple(x.shape), (self._dim,), (slice(i, i + self._ts),))]
-
-
-class RandomAttenuation(TransformerWithMode):
-    """Attenuate the input values by multiplying an attenuation factor."""
-
-    def __init__(self, attenuation: Union[float, tuple[float, float]]) -> None:
-        super().__init__()
-        self._attenuation = attenuation
-
-    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
-        if self.is_eval_mode():
-            return x
-
-        attenuation: float
-        if isinstance(self._attenuation, tuple):
-            attenuation = np.random.uniform(self._attenuation[0], self._attenuation[1])
-        else:
-            attenuation = self._attenuation
-
-        return x * attenuation
