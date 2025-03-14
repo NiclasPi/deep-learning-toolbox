@@ -13,6 +13,7 @@ from .core import (
 )
 
 from .audio import (
+    ConvertToFloat32,
     InvertPhase,
     RandomAttenuation,
     RandomSlice,

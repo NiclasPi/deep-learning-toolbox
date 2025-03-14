@@ -6,6 +6,22 @@ from .core import TransformerBase, TransformerWithMode
 from ._utils import make_slices
 
 
+class ConvertToFloat32(TransformerBase):
+    """Normalizes an integer PCM audio waveform to a float32 range of [-1, 1]."""
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if isinstance(x, np.ndarray):
+            if np.issubdtype(x.dtype, np.integer):
+                x = x.astype(np.float32) / float(np.iinfo(x.dtype).max)
+        elif isinstance(x, torch.Tensor):
+            if not torch.is_floating_point(x) and not torch.is_complex(x):
+                x = x.to(dtype=torch.float32) / float(torch.iinfo(x.dtype).max)
+        else:
+            raise ValueError(f"expected np.ndarray or torch.Tensor, got {type(x).__name__}")
+
+        return x
+
+
 class InvertPhase(TransformerBase):
     """Invert the phase of an audio waveform by negating its values."""
 
