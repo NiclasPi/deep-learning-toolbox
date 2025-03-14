@@ -1,11 +1,12 @@
 h5py
-librosa
 numpy
 opencv-python-headless
 pillow
 psutil
 pytest
 scipy
+soundfile
+soxr
 torch
 torchaudio
 torchvision
