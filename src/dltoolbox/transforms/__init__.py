@@ -10,15 +10,6 @@ from .core import (
     DictTransformCreate,
     DictTransformClone,
     DictTransformApply,
-    RandomChoices,
-)
-
-from .universal import (
-    Normalize,
-    Flip,
-    Pad,
-    Permute,
-    Reshape,
 )
 
 from .audio import (
@@ -42,4 +33,16 @@ from .image import (
     GaussianBlur,
     JPEGCompression,
     ColorJitter,
+)
+
+from .random import (
+    RandomChoices,
+)
+
+from .universal import (
+    Normalize,
+    Flip,
+    Pad,
+    Permute,
+    Reshape,
 )
