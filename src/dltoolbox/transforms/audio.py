@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from typing import Union
+from typing import Literal, Union
 
 from .core import TransformerBase, TransformerWithMode
 from ._utils import make_slices
@@ -30,6 +30,44 @@ class InvertPhase(TransformerBase):
             raise ValueError(f"expected np.ndarray or torch.Tensor, got {type(x).__name__}")
 
         return x * -1
+
+
+class MixSample(TransformerWithMode):
+    """Mixes a predefined audio sample into an input sample. Assumes both samples have equal shape."""
+
+    def __init__(self, sample: Union[np.ndarray, torch.Tensor], level: float | tuple[float, float] = 0.5) -> None:
+        super().__init__()
+        self._sample = sample
+        self._level = level
+
+    def _get_sample(self, backend: Literal["numpy", "torch"], size: int) -> np.ndarray | torch.Tensor:
+        sample = self._sample
+        if backend == "numpy" and isinstance(sample, torch.Tensor):
+            sample = sample.numpy()
+        elif backend == "torch" and isinstance(sample, np.ndarray):
+            sample = torch.from_numpy(sample)
+
+        s = sample.shape[-1]
+        if s < size:
+            # TODO: introduce padding here
+            raise ValueError(f"sample length {s} is smaller than the requested size {size}")
+        elif s == size:
+            return sample
+        else:  # sample needs slicing
+            i: int = (s - size - 1) // 2 if self.is_eval_mode() else np.random.randint(0, s - size + 1)
+            return sample[..., i:i + size]
+
+    def _get_level(self) -> float:
+        if self.is_eval_mode():
+            return 0.5
+        if isinstance(self._level, tuple):
+            return np.random.uniform(low=self._level[0], high=self._level[1])
+        return self._level
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        sample = self._get_sample("numpy" if isinstance(x, np.ndarray) else "torch", x.shape[-1])
+        level = self._get_level()
+        return x + sample * level
 
 
 class RandomAttenuation(TransformerWithMode):
