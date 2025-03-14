@@ -242,7 +242,7 @@ if __name__ == "__main__":
             sample_shape=sample_shape,
             sample_dtype=sample_dtype,
             loader_func=loader_func,
-            batch_iter=batched(train_files, batch_size),
+            batch_iter=batched(valid_files, batch_size),
             num_workers=args.num_workers
         )
         print(f"Created valid set, size: {valid_size}")
@@ -254,7 +254,7 @@ if __name__ == "__main__":
             sample_shape=sample_shape,
             sample_dtype=sample_dtype,
             loader_func=loader_func,
-            batch_iter=batched(train_files, batch_size),
+            batch_iter=batched(test_files, batch_size),
             num_workers=args.num_workers
         )
         print(f"Created test set, size: {test_size}")
