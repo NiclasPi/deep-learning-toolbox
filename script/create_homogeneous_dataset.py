@@ -6,64 +6,37 @@ import psutil
 import random
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
 from itertools import batched, chain
-from PIL import Image
-from typing import Iterable, Iterator, Tuple
+from typing import Callable, Iterable, Iterator, Tuple
 
 from dltoolbox.argutils import parse_image_size, parse_dataset_size
-
-
-def load_image(
-        file: pathlib.Path,
-        size: Tuple[int, int]  # (width, height)
-) -> Image:
-    image = Image.open(file.absolute()).convert("RGB")
-
-    if image.width < size[0] or image.height < size[1]:
-        raise RuntimeError(f"image '{file.absolute()}' is smaller than the requested target size")
-
-    fit_ratio = (image.size[0] / size[0], image.size[1] / size[1])
-    if any(x > 1 for x in fit_ratio):
-        # extract the largest possible box of the requested aspect ratio
-        crop_size = (int(size[0] * min(fit_ratio)), int(size[1] * min(fit_ratio)))
-        crop_box = (
-            (image.size[0] - crop_size[0]) // 2,
-            (image.size[1] - crop_size[1]) // 2,
-            (image.size[0] + crop_size[0]) // 2,
-            (image.size[1] + crop_size[1]) // 2
-        )
-        image = image.crop(crop_box)
-
-        # resize image to requested size
-        image = image.resize(size, resample=Image.Resampling.LANCZOS)
-
-    return image
+from dltoolbox.ioutils import read_audio, read_image
 
 
 def process_batch(
+        loader: Callable[[...], np.ndarray],
         files: Iterable[pathlib.Path],
-        size: Tuple[int, int]
 ) -> np.ndarray:
-    images = []
+    samples: list[np.ndarray] = []
 
     for file in files:
-        # load image from disk and perform preprocessing
-        image: Image = load_image(file, size)
-        # convert image to numpy array and append
-        images.append(np.array(image))
+        samples.append(loader(str(file.absolute())))
 
-    return np.stack(images, axis=0)
+    return np.stack(samples, axis=0)
 
 
 def create_dataset(
         out_path: str,
         dataset_size: int,
+        sample_shape: Tuple[int, ...],
+        sample_dtype: np.dtype,
+        loader_func: Callable[[...], np.ndarray],
         batch_iter: Iterator[Tuple[pathlib.Path, ...]],
-        image_size: Tuple[int, int],
         num_workers: int = 1,
 ) -> None:
     with h5py.File(out_path, "w-") as h5:  # create file, fail if exists
-        dataset = h5.create_dataset("data", shape=(dataset_size, *image_size, 3), dtype=np.uint8)
+        dataset = h5.create_dataset("data", shape=(dataset_size, *sample_shape), dtype=sample_dtype)
         index = 0
 
         # parallel processing of batches
@@ -72,7 +45,7 @@ def create_dataset(
                 futures = {}
                 for i in range(num_workers):
                     try:
-                        future = executor.submit(process_batch, next(batch_iter), image_size)
+                        future = executor.submit(process_batch, loader_func, next(batch_iter))
                         futures[future] = id(future)
                     except StopIteration:
                         break
@@ -89,13 +62,13 @@ def create_dataset(
                         del futures[future]
 
                         try:
-                            future = executor.submit(process_batch, next(batch_iter), image_size)
+                            future = executor.submit(process_batch, loader_func, next(batch_iter))
                             futures[future] = id(future)
                         except StopIteration:
                             continue
         else:
             for batch in batch_iter:
-                result = process_batch(batch, image_size)
+                result = process_batch(loader_func, batch)
 
                 # store the result
                 dataset.write_direct(result, dest_sel=range(index, index + result.shape[0]))
@@ -104,6 +77,11 @@ def create_dataset(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset-type",
+        choices=["audio", "image"],
+        required=True,
+    )
     parser.add_argument(
         "--output-directory",
         type=str,
@@ -137,8 +115,9 @@ if __name__ == "__main__":
         "--target-size",
         type=int,
         nargs="+",
-        help="Size of the images after cropping and resizing. One value requests square sized images, two values "
-             "request a specific width and height for the images."
+        help="Requested size of the audio or images. For audio one value defines length in samples. For images "
+             "it is the image size after cropping and resizing. One value requests square sized images, "
+             "two values request a specific width and height for the images."
     )
     parser.add_argument(
         "--dataset-size",
@@ -209,42 +188,73 @@ if __name__ == "__main__":
     test_files = file_paths[train_size + valid_size:train_size + valid_size + test_size]
     print(f"Dataset size: {train_size} (train), {valid_size} (valid), {test_size} (test)")
 
-    # compute batch size
-    image_size = parse_image_size(args.target_size)
-    image_bytes = np.empty((*image_size, 3), dtype=np.uint8).nbytes
+    # compute sample size
+    target_size: Tuple[int, ...]
+    sample_shape: Tuple[int, ...]
+    sample_dtype: np.dtype
+    if args.dataset_type == "audio":
+        target_size = (args.target_size[-1],)  # only the last one is used, discarding the rest
+        sample_shape = (1, *target_size)  # one channel (mono)
+        sample_dtype = np.int16
+    else:
+        target_size = parse_image_size(args.target_size)
+        sample_shape = (*target_size, 3)  # three color channels (RGB)
+        sample_dtype = np.uint8
+    # compute batch size based on sample size
+    sample_bytes = np.empty(sample_shape, sample_dtype).nbytes
     batch_size = min(
-        available_memory_per_worker // image_bytes,  # hard memory per worker constraint
+        available_memory_per_worker // sample_bytes,  # hard memory per worker constraint
         min(k for k in [train_size, valid_size, test_size] if k > 0) // args.num_workers  # even worker distribution
     )
     print(f"Batch size: {batch_size}")
 
+    # define the loader function
+    loader_func: Callable[[...], np.ndarray]
+    if args.dataset_type == "audio":
+        loader_func = partial(
+            read_audio,
+            target_length=target_size[-1],
+            random_sample_slice=True,
+        )
+    else:
+        loader_func = partial(
+            read_image,
+            target_size=target_size,
+        )
+
     # create datasets
     if train_size > 0:
         create_dataset(
-            os.path.join(args.output_directory, f"{args.output_prefix}_train.hdf5"),
-            train_size,
-            batched(train_files, batch_size),
-            image_size,
+            out_path=os.path.join(args.output_directory, f"{args.output_prefix}_train.hdf5"),
+            dataset_size=train_size,
+            sample_shape=sample_shape,
+            sample_dtype=sample_dtype,
+            loader_func=loader_func,
+            batch_iter=batched(train_files, batch_size),
             num_workers=args.num_workers
         )
         print(f"Created train set, size: {train_size}")
 
     if valid_size > 0:
         create_dataset(
-            os.path.join(args.output_directory, f"{args.output_prefix}_valid.hdf5"),
-            valid_size,
-            batched(valid_files, batch_size),
-            image_size,
+            out_path=os.path.join(args.output_directory, f"{args.output_prefix}_valid.hdf5"),
+            dataset_size=valid_size,
+            sample_shape=sample_shape,
+            sample_dtype=sample_dtype,
+            loader_func=loader_func,
+            batch_iter=batched(train_files, batch_size),
             num_workers=args.num_workers
         )
         print(f"Created valid set, size: {valid_size}")
 
     if test_size > 0:
         create_dataset(
-            os.path.join(args.output_directory, f"{args.output_prefix}_test.hdf5"),
-            test_size,
-            batched(test_files, batch_size),
-            image_size,
+            out_path=os.path.join(args.output_directory, f"{args.output_prefix}_test.hdf5"),
+            dataset_size=test_size,
+            sample_shape=sample_shape,
+            sample_dtype=sample_dtype,
+            loader_func=loader_func,
+            batch_iter=batched(train_files, batch_size),
             num_workers=args.num_workers
         )
         print(f"Created test set, size: {test_size}")
