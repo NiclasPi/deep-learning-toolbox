@@ -34,7 +34,7 @@ def read_audio(
 
     if audio_data.shape[0] > 1:
         # convert to mono by taking the left channel only
-        audio_data = audio_data[0]
+        audio_data = audio_data[0:1]  # index with 0:1 to keep the channel dimension
 
     # pad if more samples are requested than available
     audio_length = audio_data.shape[-1]
