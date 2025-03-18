@@ -1,9 +1,71 @@
+import io
 import numpy as np
+import soundfile as sf
 import torch
 from typing import Literal, Union
 
 from .core import TransformerBase, TransformerWithMode
 from ._utils import make_slices
+
+
+class AudioCodecCompression(TransformerWithMode):
+    """
+    Apply compression of different audio codecs to the input audio waveform.
+    Select a fixed audio codec or a random codec is selected on __call__.
+    Select a fixed compression level between 0 (minimum compression) and 1 (highest compression)
+    or a random value from a range is selected on __call__.
+    """
+
+    def __init__(
+            self,
+            codec: Literal["MP3", "OGG"] | tuple[Literal["MP3", "OGG"], ...] = "MP3",
+            level: float | tuple[float, float] = 0.5,
+    ) -> None:
+        super().__init__()
+        self._codec = (codec,) if isinstance(codec, str) else codec
+        self._l_min, self._l_max = (level, level) if isinstance(level, float) else level
+
+    def _get_format(self) -> str:
+        if len(self._codec) > 1:
+            if self.is_eval_mode():
+                # always select the first codec in eval mode
+                return self._codec[0]
+            else:
+                return self._codec[np.random.randint(len(self._codec))]
+
+        return self._codec[0]
+
+    def _get_compression_level(self) -> float:
+        if self.is_eval_mode():
+            # return the compression level between min and max in eval mode
+            return self._l_min + (self._l_max - self._l_min) // 2
+        # select a random compression level in the interval [min, max)
+        return np.random.uniform(low=self._l_min, high=self._l_max)
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        # input has shape (channels, frames)
+
+        is_tensor = False
+        if isinstance(x, torch.Tensor):
+            is_tensor = True
+            x = x.cpu().numpy()
+
+        x = np.swapaxes(x, 0, 1)  # python-soundfile expects shape (frames, channels)
+
+        # save using the lossy codec
+        out = io.BytesIO()
+        sf.write(file=out, data=x, samplerate=22050,
+                 format=self._get_format(),
+                 compression_level=self._get_compression_level())
+        # read the compressed data
+        out.seek(0)
+        data, _ = sf.read(out, dtype=x.dtype, always_2d=True)
+
+        x = np.swapaxes(data, 0, 1)  # swap back to (channels, frames)
+
+        if is_tensor:
+            x = torch.from_numpy(x)
+        return x
 
 
 class ConvertToFloat32(TransformerBase):

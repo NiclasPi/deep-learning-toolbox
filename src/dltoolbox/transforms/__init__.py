@@ -13,6 +13,7 @@ from .core import (
 )
 
 from .audio import (
+    AudioCodecCompression,
     ConvertToFloat32,
     InvertPhase,
     MixSample,
