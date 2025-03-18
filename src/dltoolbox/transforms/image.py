@@ -201,6 +201,9 @@ class RandomErasing(TransformerWithMode):
             raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(region)}")
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if self.is_eval_mode():
+            return x
+
         # get the slices of the randomly selected region
         region_slices = self._get_region_slices(tuple(x.shape[d] for d in self._dim))
         # get a view into that region
