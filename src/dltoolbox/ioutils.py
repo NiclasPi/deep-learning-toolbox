@@ -3,6 +3,9 @@ import soundfile as sf
 from PIL import Image
 from soxr import resample
 
+from images.crop import crop_image
+from images.scale import scale_image
+
 
 def read_audio(
         file_path: str,
@@ -58,30 +61,34 @@ def read_audio(
 def read_image(
         file_path: str,
         target_size: int | tuple[int, int],
+        *,
+        randomized_crop: bool = False,
+        scale_to_fit: bool = False,
 ) -> np.ndarray:
-    """Load an image file from disk and return it as a numpy array."""
+    """Load an image file from disk and return it as a numpy array.
 
-    if isinstance(target_size, int):
-        target_size = (target_size, target_size)
+    Args:
+        file_path (str):
+            Path to the image file
+        target_size (int | tuple[int, int]):
+            Target size as int (square) or tuple (width, height)
+        randomized_crop (bool):
+            If True, crop at random location. If False, center crop.
+        scale_to_fit (bool):
+            If True, scale image so smaller side fits target, then crop larger side.
+            If False, crop directly from original image.
 
+    Returns:
+        Image as numpy array with shape (height, width, 3) and dtype uint8
+    """
     image = Image.open(file_path).convert("RGB")
+
+    if scale_to_fit:
+        image = scale_image(image=image, target_size=target_size)
 
     if image.width < target_size[0] or image.height < target_size[1]:
         raise RuntimeError(f"image '{file_path}' is smaller than the requested target size")
 
-    fit_ratio = (image.size[0] / target_size[0], image.size[1] / target_size[1])
-    if any(x > 1 for x in fit_ratio):
-        # extract the largest possible box of the requested aspect ratio
-        crop_size = (int(target_size[0] * min(fit_ratio)), int(target_size[1] * min(fit_ratio)))
-        crop_box = (
-            (image.size[0] - crop_size[0]) // 2,
-            (image.size[1] - crop_size[1]) // 2,
-            (image.size[0] + crop_size[0]) // 2,
-            (image.size[1] + crop_size[1]) // 2
-        )
-        image = image.crop(crop_box)
-
-        # resize image to requested size
-        image = image.resize(target_size, resample=Image.Resampling.LANCZOS)
+    image = crop_image(image=image, target_shape=target_size, randomized_crop=randomized_crop)
 
     return np.array(image, dtype=np.uint8)
