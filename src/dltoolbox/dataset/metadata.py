@@ -18,7 +18,7 @@ class DatasetMetadata:
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     git_hash: str | None = None
 
-    comment: str | None
+    comment: str | None = None
 
     @staticmethod
     def from_json_bytes(json_bytes: bytes) -> DatasetMetadata:
