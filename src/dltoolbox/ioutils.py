@@ -3,6 +3,7 @@ import soundfile as sf
 from PIL import Image
 from soxr import resample
 
+from dltoolbox.errors import ImageTooSmallError
 from dltoolbox.images.crop import crop_image
 from dltoolbox.images.scale import scale_image
 
@@ -86,8 +87,11 @@ def read_image(
     if scale_to_fit:
         image = scale_image(image=image, target_size=target_size)
 
-    if image.width < target_size[0] or image.height < target_size[1]:
-        raise RuntimeError(f"image '{file_path}' is smaller than the requested target size")
+    if (
+            image.width < (target_size[0] if isinstance(target_size, tuple) else target_size) or
+            image.height < (target_size[1] if isinstance(target_size, tuple) else target_size)
+    ):
+        raise ImageTooSmallError(image.size, target_size)
 
     image = crop_image(image=image, target_shape=target_size, randomized_crop=randomized_crop)
 
