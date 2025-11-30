@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from typing import Dict, Optional, Union
 
-from .core import Transformer, TransformerWithMode
+from dltoolbox.transforms.core import Transformer, TransformerWithMode
 
 
 class RandomChoices(TransformerWithMode):

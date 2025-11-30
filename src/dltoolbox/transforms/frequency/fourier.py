@@ -3,7 +3,7 @@ import torch
 from typing import Tuple, Union
 from scipy.fft import dctn
 
-from ..core import TransformerBase
+from dltoolbox.transforms.core import TransformerBase
 
 
 class FFT(TransformerBase):

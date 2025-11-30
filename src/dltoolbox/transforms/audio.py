@@ -4,8 +4,8 @@ import soundfile as sf
 import torch
 from typing import Literal, Union
 
-from .core import TransformerBase, TransformerWithMode
-from ._utils import make_slices
+from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
+from dltoolbox.transforms._utils import make_slices
 
 
 class AudioCodecCompression(TransformerWithMode):

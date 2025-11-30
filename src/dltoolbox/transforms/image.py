@@ -7,9 +7,9 @@ from PIL import Image
 from typing import Tuple, Union
 from scipy.ndimage import gaussian_filter
 
-from .core import TransformerBase, TransformerWithMode
-from ._image_utils_np import adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue
-from ._utils import make_slices
+from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
+from dltoolbox.transforms._image_utils_np import adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue
+from dltoolbox.transforms._utils import make_slices
 
 
 class RandomCrop(TransformerWithMode):

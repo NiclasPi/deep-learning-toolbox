@@ -1,4 +1,4 @@
-from .core import (
+from dltoolbox.transforms.core import (
     Transformer,
     TransformerMode,
     TransformerBase,
@@ -12,7 +12,7 @@ from .core import (
     DictTransformApply,
 )
 
-from .audio import (
+from dltoolbox.transforms.audio import (
     AudioCodecCompression,
     ConvertToFloat32,
     InvertPhase,
@@ -21,12 +21,12 @@ from .audio import (
     RandomSlice,
 )
 
-from .frequency import (
+from dltoolbox.transforms.frequency import (
     FFT,
     DCT,
 )
 
-from .image import (
+from dltoolbox.transforms.image import (
     RandomCrop,
     RandomPatchesInGrid,
     RandomFlip,
@@ -38,11 +38,11 @@ from .image import (
     ColorJitter,
 )
 
-from .random import (
+from dltoolbox.transforms.random import (
     RandomChoices,
 )
 
-from .universal import (
+from dltoolbox.transforms.universal import (
     Normalize,
     Flip,
     Pad,

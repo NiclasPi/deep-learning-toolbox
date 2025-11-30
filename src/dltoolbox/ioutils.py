@@ -3,8 +3,8 @@ import soundfile as sf
 from PIL import Image
 from soxr import resample
 
-from images.crop import crop_image
-from images.scale import scale_image
+from dltoolbox.images.crop import crop_image
+from dltoolbox.images.scale import scale_image
 
 
 def read_audio(
