@@ -1,7 +1,8 @@
-import numpy as np
-import torch
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
+
+import numpy as np
+import torch
 
 
 @dataclass
@@ -53,9 +54,7 @@ class WelfordEstimator:
         else:
             return torch.prod(torch.tensor([input_shape[i] for i in range(len(input_shape)) if i in self._dim]))
 
-    def update(self,
-               data: torch.Tensor,
-               ) -> None:
+    def update(self, data: torch.Tensor) -> None:
         """
         Update the internal state by incorporating the input data.
 
@@ -76,10 +75,9 @@ class WelfordEstimator:
         delta2 = torch.sub(data, self.mean)
         self.m2 += torch.sum(delta1 * delta2, dim=tuple(range(len(self._dim))) if self._dim else None)
 
-    def finalize(self,
-                 dtype: torch.dtype = torch.float64,
-                 device: torch.device = None,
-                 ) -> Tuple[torch.Tensor, torch.Tensor, Optional[Tuple[int, ...]]]:
+    def finalize(
+        self, dtype: torch.dtype = torch.float64, device: torch.device = None
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[Tuple[int, ...]]]:
         """
         Return the mean and standard deviation tensors.
 
@@ -96,6 +94,8 @@ class WelfordEstimator:
             permutation (tuple, optional): The ordering of dimensions for permutation, if applicable.
         """
 
-        return (self.mean.to(dtype=dtype, device=device),
-                torch.sqrt(self.m2 / self.count).to(dtype=dtype, device=device),
-                tuple(v - 1 for i, v in enumerate(self._permute) if i > 0) if self._permute is not None else None)
+        return (
+            self.mean.to(dtype=dtype, device=device),
+            torch.sqrt(self.m2 / self.count).to(dtype=dtype, device=device),
+            tuple(v - 1 for i, v in enumerate(self._permute) if i > 0) if self._permute is not None else None,
+        )

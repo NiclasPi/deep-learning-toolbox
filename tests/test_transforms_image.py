@@ -1,10 +1,11 @@
+from typing import Literal, Tuple, Union
+
 import numpy as np
 import pytest
 import torch
-from typing import Literal, Tuple, Union
 
 import dltoolbox.transforms.image as tfs
-from tests.utils import transform_set_mode, transform_create_input
+from tests.utils import transform_create_input, transform_set_mode
 
 
 class TestTransformsImage:
@@ -13,11 +14,11 @@ class TestTransformsImage:
     @pytest.mark.parametrize("shape", [(32, 32), (3, 32, 32)])
     @pytest.mark.parametrize("size", [16, (16, 16), 31, (31, 13)])
     def test_random_crop(
-            self,
-            mode: Literal["train", "eval"],
-            backend: Literal["numpy", "torch"],
-            shape: Tuple[int, ...],
-            size: Union[int, Tuple[int, int]],
+        self,
+        mode: Literal["train", "eval"],
+        backend: Literal["numpy", "torch"],
+        shape: Tuple[int, ...],
+        size: Union[int, Tuple[int, int]],
     ) -> None:
         tf = tfs.RandomCrop(size=size)
         transform_set_mode(tf, mode)
@@ -33,11 +34,7 @@ class TestTransformsImage:
     @pytest.mark.parametrize("dim", [(0,), (-1,), (0, 1)])
     @pytest.mark.parametrize("prob", [0.0, 0.5, 1.0])
     def test_random_flip(
-            self,
-            mode: Literal["train", "eval"],
-            backend: Literal["numpy", "torch"],
-            dim: Tuple[int, ...],
-            prob: float,
+        self, mode: Literal["train", "eval"], backend: Literal["numpy", "torch"], dim: Tuple[int, ...], prob: float
     ) -> None:
         tf = tfs.RandomFlip(dim=dim, prob=prob)
         transform_set_mode(tf, mode)
@@ -57,10 +54,7 @@ class TestTransformsImage:
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     @pytest.mark.parametrize("dim", [(0,), (-1,), (0, 1)])
     def test_random_noise(
-            self,
-            mode: Literal["train", "eval"],
-            backend: Literal["numpy", "torch"],
-            dim: Tuple[int, ...],
+        self, mode: Literal["train", "eval"], backend: Literal["numpy", "torch"], dim: Tuple[int, ...]
     ) -> None:
         tf = tfs.RandomNoise(dim=dim)
         transform_set_mode(tf, mode)

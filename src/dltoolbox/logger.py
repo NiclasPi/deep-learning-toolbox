@@ -8,6 +8,4 @@ class Logger:
         self._debug = __debug__ or log_file is None
 
     def log(self, *values: object) -> None:
-        print(*values,
-              file=open(self._log_file_path, "a") if not self._debug else None,
-              flush=True)
+        print(*values, file=open(self._log_file_path, "a") if not self._debug else None, flush=True)

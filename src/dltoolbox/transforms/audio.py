@@ -1,11 +1,12 @@
 import io
+from typing import Literal, Union
+
 import numpy as np
 import soundfile as sf
 import torch
-from typing import Literal, Union
 
-from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
 from dltoolbox.transforms._utils import make_slices
+from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
 
 
 class AudioCodecCompression(TransformerWithMode):
@@ -17,9 +18,9 @@ class AudioCodecCompression(TransformerWithMode):
     """
 
     def __init__(
-            self,
-            codec: Literal["MP3", "OGG"] | tuple[Literal["MP3", "OGG"], ...] = "MP3",
-            level: float | tuple[float, float] = 0.5,
+        self,
+        codec: Literal["MP3", "OGG"] | tuple[Literal["MP3", "OGG"], ...] = "MP3",
+        level: float | tuple[float, float] = 0.5,
     ) -> None:
         super().__init__()
         self._codec = (codec,) if isinstance(codec, str) else codec
@@ -54,9 +55,13 @@ class AudioCodecCompression(TransformerWithMode):
 
         # save using the lossy codec
         out = io.BytesIO()
-        sf.write(file=out, data=x, samplerate=22050,
-                 format=self._get_format(),
-                 compression_level=self._get_compression_level())
+        sf.write(
+            file=out,
+            data=x,
+            samplerate=22050,
+            format=self._get_format(),
+            compression_level=self._get_compression_level(),
+        )
         # read the compressed data
         out.seek(0)
         data, _ = sf.read(out, dtype=x.dtype, always_2d=True)
@@ -117,7 +122,7 @@ class MixSample(TransformerWithMode):
             return sample
         else:  # sample needs slicing
             i: int = (s - size - 1) // 2 if self.is_eval_mode() else np.random.randint(0, s - size + 1)
-            return sample[..., i:i + size]
+            return sample[..., i : i + size]
 
     def _get_level(self) -> float:
         if self.is_eval_mode():

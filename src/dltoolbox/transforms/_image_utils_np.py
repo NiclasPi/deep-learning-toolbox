@@ -1,6 +1,7 @@
+from typing import Literal
+
 import cv2
 import numpy as np
-from typing import Literal
 
 """
 Utility functions for image manipulation.

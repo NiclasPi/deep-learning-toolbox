@@ -1,22 +1,18 @@
+from typing import Tuple
+
 import numpy as np
 import pytest
 import torch
-from typing import Tuple
 
 import dltoolbox.transforms as tfs
-
 from tests.utils import transform_create_input
+
 
 class TestTransformsFrequency:
     @pytest.mark.parametrize("dim", [(0,), (1,), (0, 2), (-2, -1)])
     @pytest.mark.parametrize("shift", [False, True])
     @pytest.mark.parametrize("log", [False, True])
-    def test_fft(
-            self,
-            dim: Tuple[int, ...],
-            shift: bool,
-            log: bool,
-    ) -> None:
+    def test_fft(self, dim: Tuple[int, ...], shift: bool, log: bool) -> None:
         tf = tfs.FFT(dim=dim, shift=shift, log=log)
 
         x = transform_create_input("numpy", shape=(3, 128, 128))

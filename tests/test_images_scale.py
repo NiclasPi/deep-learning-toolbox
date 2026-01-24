@@ -32,9 +32,7 @@ def test_scale_fit(image_size: tuple[int, int]) -> None:
     scaled = scale_image(image=image, target_size=(64, 64))
 
     # assert smaller side exactly fits target
-    assert min(*scaled.size) == 64, (
-        f"Smaller side should fit target: got {min(*scaled.size) }, expected {64}"
-    )
+    assert min(*scaled.size) == 64, f"Smaller side should fit target: got {min(*scaled.size)}, expected {64}"
 
     # assert aspect ratio is preserved
     original_ratio = image.width / image.height

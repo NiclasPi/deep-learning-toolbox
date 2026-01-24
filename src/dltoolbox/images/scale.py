@@ -1,11 +1,7 @@
 from PIL.Image import Image, Resampling
 
 
-def scale_image(
-        *,
-        image: Image,
-        target_size: int | tuple[int, int],
-) -> Image:
+def scale_image(*, image: Image, target_size: int | tuple[int, int]) -> Image:
     """Scale an image to cover the target size while preserving aspect ratio.
 
     The image is scaled so that it completely covers the target width and height.

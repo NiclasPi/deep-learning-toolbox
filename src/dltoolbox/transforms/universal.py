@@ -1,10 +1,11 @@
-import numpy as np
-import torch
 from itertools import chain
 from typing import Literal, Self, Tuple, Union
 
-from dltoolbox.transforms.core import TransformerBase
+import numpy as np
+import torch
+
 from dltoolbox.normalization import Normalization, WelfordEstimator
+from dltoolbox.transforms.core import TransformerBase
 from dltoolbox.utils import inverse_permutation
 
 
@@ -29,24 +30,23 @@ class Normalize(TransformerBase):
     @classmethod
     def from_normalization(cls, n: Normalization, device: torch.device = torch.device("cpu")) -> Self:
         if isinstance(n.mean, torch.Tensor):  # if mean is tensor, then std should also be a tensor
-            return cls(n.mean.to(dtype=torch.float32, device=device),
-                       n.std.to(dtype=torch.float32, device=device),
-                       n.perm)
+            return cls(
+                n.mean.to(dtype=torch.float32, device=device), n.std.to(dtype=torch.float32, device=device), n.perm
+            )
         else:
-            return cls(n.mean,
-                       n.std,
-                       n.perm)
+            return cls(n.mean, n.std, n.perm)
 
     @classmethod
     def from_welford(cls, welford: WelfordEstimator, device: torch.device = torch.device("cpu")) -> Self:
         mean, std, permute = welford.finalize(dtype=torch.float32, device=device)
         return cls(mean, std, permute)
 
-    def __init__(self,
-                 mean: Union[float, np.ndarray, torch.Tensor],
-                 std: Union[float, np.ndarray, torch.Tensor],
-                 permute: Tuple[int, ...] | None = None
-                 ) -> None:
+    def __init__(
+        self,
+        mean: Union[float, np.ndarray, torch.Tensor],
+        std: Union[float, np.ndarray, torch.Tensor],
+        permute: Tuple[int, ...] | None = None,
+    ) -> None:
         self._mean = mean
         self._std = std
         self._permute = permute
@@ -80,14 +80,15 @@ class Normalize(TransformerBase):
 class Pad(TransformerBase):
     """Pad the given input along given dimensions."""
 
-    def __init__(self,
-                 shape: Tuple[int, ...],
-                 dim: Tuple[int, ...],
-                 mode: Literal["constant", "reflect", "replicate", "circular"] = "constant",
-                 value: float | None = 0
-                 ) -> None:
+    def __init__(
+        self,
+        shape: Tuple[int, ...],
+        dim: Tuple[int, ...],
+        mode: Literal["constant", "reflect", "replicate", "circular"] = "constant",
+        value: float | None = 0,
+    ) -> None:
         if len(shape) != len(dim):
-            raise ValueError(f"shape and dim tuples must have the same length")
+            raise ValueError("shape and dim tuples must have the same length")
         if mode == "constant" and value is None:
             raise ValueError("value must be provided for 'constant' padding mode")
 

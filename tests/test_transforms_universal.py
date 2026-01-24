@@ -1,11 +1,11 @@
+from typing import Literal, Tuple
+
 import numpy as np
 import pytest
 import torch
-from typing import Literal, Tuple
 
 import dltoolbox.transforms as tfs
 from dltoolbox.normalization import WelfordEstimator
-
 from tests.utils import transform_create_input
 
 
@@ -24,7 +24,7 @@ class TestTransformsUniversal:
         # get the first element for all dimensions
         x_slices = [slice(0, 1)] * x.ndim
         y_slices = [slice(0, 1)] * y.ndim
-        for d in (dim if isinstance(dim, tuple) else (dim,)):
+        for d in dim if isinstance(dim, tuple) else (dim,):
             # for the flipped dimensions, the first element is now expected to be the last element
             y_slices[d] = slice(-1, None)
 
@@ -45,6 +45,7 @@ class TestTransformsUniversal:
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     def test_normalize_from_normalization_dataclass(self, backend: Literal["numpy", "torch"]) -> None:
         from dltoolbox.normalization import Normalization
+
         normalization: Normalization
 
         mean = np.full((3, 16, 16), fill_value=1.1, dtype=np.float32)

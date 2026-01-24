@@ -1,11 +1,12 @@
-import numpy as np
-import pytest
-import tempfile
-import torch
 import os
+import tempfile
 from typing import Literal, Tuple
 
-from dltoolbox.dataset import H5DatasetDisk, H5DatasetMemory, H5Dataset, create_hdf5_file
+import numpy as np
+import pytest
+import torch
+
+from dltoolbox.dataset import H5Dataset, H5DatasetDisk, H5DatasetMemory, create_hdf5_file
 from dltoolbox.transforms import ToTensor
 
 
@@ -28,8 +29,7 @@ def create_temporary_hdf5(data_shape, labels_shape) -> Tuple[tempfile.NamedTempo
         data = np.random.randn(*data_shape).astype(np.float16)
         labels = np.random.randn(*labels_shape).astype(np.float16)
 
-        create_hdf5_file(tmp_file.name, data, labels,
-                         ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8"))
+        create_hdf5_file(tmp_file.name, data, labels, ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8"))
 
         yield tmp_file, data, labels
     finally:
@@ -45,8 +45,9 @@ def create_temporary_hdf5_data_only(data_shape) -> Tuple[tempfile.NamedTemporary
     try:
         data = np.random.randn(*data_shape).astype(np.float16)
 
-        create_hdf5_file(tmp_file.name, data, labels_arr=None,
-                         ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8"))
+        create_hdf5_file(
+            tmp_file.name, data, labels_arr=None, ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8")
+        )
 
         yield tmp_file, data
     finally:
@@ -58,9 +59,7 @@ class TestDataset:
     @pytest.mark.parametrize("axis", [0, 1])
     def test_h5_disk(self, labels_shape, create_temporary_hdf5, axis: int) -> None:
         h5_file, data, labels = create_temporary_hdf5
-        dataset = H5DatasetDisk(h5_file.name,
-                                data_row_dim=axis,
-                                label_row_dim=axis)
+        dataset = H5DatasetDisk(h5_file.name, data_row_dim=axis, label_row_dim=axis)
 
         assert len(dataset) == data.shape[axis] > 0
         sample, label = dataset[0]
@@ -72,9 +71,7 @@ class TestDataset:
     @pytest.mark.parametrize("axis", [0, 1])
     def test_h5_memory(self, create_temporary_hdf5, axis: int) -> None:
         h5_file, data, labels = create_temporary_hdf5
-        dataset = H5DatasetMemory(h5_file.name,
-                                  data_row_dim=axis,
-                                  label_row_dim=axis)
+        dataset = H5DatasetMemory(h5_file.name, data_row_dim=axis, label_row_dim=axis)
         assert len(dataset) == data.shape[axis] > 0
         sample, label = dataset[0]
         assert sample.shape == tuple([s for d, s in enumerate(data.shape) if d != axis])
@@ -86,10 +83,7 @@ class TestDataset:
     def test_h5_disk_indices(self, create_temporary_hdf5, axis: int) -> None:
         h5_file, data, labels = create_temporary_hdf5
         indices = [0, 1, 2, 15]
-        dataset = H5DatasetDisk(h5_file.name,
-                                data_row_dim=axis,
-                                label_row_dim=axis,
-                                select_indices=indices)
+        dataset = H5DatasetDisk(h5_file.name, data_row_dim=axis, label_row_dim=axis, select_indices=indices)
 
         assert len(dataset) == 4
         for i in range(len(indices)):
@@ -103,10 +97,7 @@ class TestDataset:
     def test_h5_memory_indices(self, create_temporary_hdf5, axis: int) -> None:
         h5_file, data, labels = create_temporary_hdf5
         indices = [0, 1, 2, 15]
-        dataset = H5DatasetMemory(h5_file.name,
-                                  data_row_dim=axis,
-                                  label_row_dim=axis,
-                                  select_indices=indices)
+        dataset = H5DatasetMemory(h5_file.name, data_row_dim=axis, label_row_dim=axis, select_indices=indices)
 
         assert len(dataset) == 4
         for i in range(len(indices)):

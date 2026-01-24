@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 

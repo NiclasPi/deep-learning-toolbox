@@ -1,15 +1,16 @@
+from io import BytesIO
+from math import sqrt
+from typing import Tuple, Union
+
 import numpy as np
 import torch
 import torchvision
-from io import BytesIO
-from math import sqrt
 from PIL import Image
-from typing import Tuple, Union
 from scipy.ndimage import gaussian_filter
 
-from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
-from dltoolbox.transforms._image_utils_np import adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue
+from dltoolbox.transforms._image_utils_np import adjust_brightness, adjust_contrast, adjust_hue, adjust_saturation
 from dltoolbox.transforms._utils import make_slices
+from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
 
 
 class RandomCrop(TransformerWithMode):
@@ -30,11 +31,11 @@ class RandomCrop(TransformerWithMode):
             # perform a center crop in eval mode
             i = (h - self._th + 1) // 2
             j = (w - self._tw + 1) // 2
-            return x[..., i:i + self._th, j:j + self._tw]
+            return x[..., i : i + self._th, j : j + self._tw]
         else:
             i = np.random.randint(0, h - self._th + 1)
             j = np.random.randint(0, w - self._tw + 1)
-            return x[..., i:i + self._th, j:j + self._tw]
+            return x[..., i : i + self._th, j : j + self._tw]
 
 
 class RandomPatchesInGrid(TransformerWithMode):
@@ -43,10 +44,11 @@ class RandomPatchesInGrid(TransformerWithMode):
     Creates a new dimension for the resulting patches [..., N, size[0], size[1]].
     """
 
-    def __init__(self,
-                 size: Union[int, Tuple[int, int]],  # path size (height, width)
-                 grid: Union[int, Tuple[int, int]],  # grid layout (rows, columns)
-                 ) -> None:
+    def __init__(
+        self,
+        size: Union[int, Tuple[int, int]],  # path size (height, width)
+        grid: Union[int, Tuple[int, int]],  # grid layout (rows, columns)
+    ) -> None:
         super().__init__()
         self._th, self._tw = size if isinstance(size, tuple) else (size, size)
         self._rows, self._cols = self._compute_grid_layout(grid)
@@ -66,8 +68,10 @@ class RandomPatchesInGrid(TransformerWithMode):
     def _make_grid(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         *other_dims, h, w = x.shape
         if h // self._th < self._rows or w // self._tw < self._cols:
-            raise ValueError(f"input of shape {x.shape} cannot be reshaped into a {self._rows}x{self._cols} grid "
-                             f"with cells of at least size ({self._th}, {self._tw})")
+            raise ValueError(
+                f"input of shape {x.shape} cannot be reshaped into a {self._rows}x{self._cols} grid "
+                f"with cells of at least size ({self._th}, {self._tw})"
+            )
 
         # compute the cell height and width
         cell_h = h // self._rows
@@ -79,9 +83,11 @@ class RandomPatchesInGrid(TransformerWithMode):
         x = x[..., :trimmed_h, :trimmed_w]
 
         # reshape into (..., rows, cols, cell_height, cell_width)
-        return (x[..., :self._rows * cell_h, :self._cols * cell_w]
-                .reshape(*other_dims, self._rows, cell_h, self._cols, cell_w)
-                .swapaxes(-3, -2))
+        return (
+            x[..., : self._rows * cell_h, : self._cols * cell_w]
+            .reshape(*other_dims, self._rows, cell_h, self._cols, cell_w)
+            .swapaxes(-3, -2)
+        )
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         x_grid = self._make_grid(x)
@@ -96,12 +102,12 @@ class RandomPatchesInGrid(TransformerWithMode):
                     # select the center in eval mode
                     i = (cell_h - self._th + 1) // 2
                     j = (cell_w - self._tw + 1) // 2
-                    x_patches.append(cell_ij[..., i:i + self._th, j:j + self._tw])
+                    x_patches.append(cell_ij[..., i : i + self._th, j : j + self._tw])
                 else:
                     # select a random crop of the grid cell
                     i = np.random.randint(0, cell_h - self._th + 1)
                     j = np.random.randint(0, cell_w - self._tw + 1)
-                    x_patches.append(cell_ij[..., i:i + self._th, j:j + self._tw])
+                    x_patches.append(cell_ij[..., i : i + self._th, j : j + self._tw])
 
         if isinstance(x_grid, np.ndarray):
             return np.stack(x_patches, axis=-3)
@@ -170,11 +176,12 @@ class RandomErasing(TransformerWithMode):
     Erase a randomly selected region with the specified fill value.
     """
 
-    def __init__(self,
-                 dim: Tuple[int, ...],
-                 scale: Tuple[float, float] = (0.02, 0.33),
-                 value: Union[int, float, bool, complex] = 0,
-                 ) -> None:
+    def __init__(
+        self,
+        dim: Tuple[int, ...],
+        scale: Tuple[float, float] = (0.02, 0.33),
+        value: Union[int, float, bool, complex] = 0,
+    ) -> None:
         super().__init__()
         self._dim = dim
         self._scale = scale
@@ -237,16 +244,16 @@ class RandomNoise(TransformerWithMode):
             if issubclass(x.dtype.type, np.integer):
                 # array has integer dtype and needs careful boundary handling
                 dtype_info = np.iinfo(x.dtype)
-                return np.clip(x.astype(np.float64) + noise,
-                               a_min=dtype_info.min, a_max=dtype_info.max).astype(x.dtype)
+                return np.clip(x.astype(np.float64) + noise, a_min=dtype_info.min, a_max=dtype_info.max).astype(x.dtype)
             else:
                 return x + noise.astype(x.dtype)
         elif isinstance(x, torch.Tensor):
             if not torch.is_floating_point(x) and not torch.is_complex(x):
                 # tensor has integer dtype and needs careful boundary handling
                 dtype_info = np.iinfo(np.dtype(str(x.dtype).lstrip("torch.")))
-                return torch.clamp(x.to(torch.float64) + torch.from_numpy(noise),
-                                   min=dtype_info.min, max=dtype_info.max).to(x.dtype)
+                return torch.clamp(
+                    x.to(torch.float64) + torch.from_numpy(noise), min=dtype_info.min, max=dtype_info.max
+                ).to(x.dtype)
             else:
                 return x + torch.from_numpy(noise).to(x.dtype)
         else:
@@ -320,17 +327,17 @@ class ColorJitter(TransformerWithMode):
     Randomly change the brightness, contrast, saturation and hue of an image.
     """
 
-    def __init__(self,
-                 brightness: Union[float, Tuple[float, float]] = 0.0,
-                 contrast: Union[float, Tuple[float, float]] = 0.0,
-                 saturation: Union[float, Tuple[float, float]] = 0.0,
-                 hue: Union[float, Tuple[float, float]] = 0.0,
-                 ):
+    def __init__(
+        self,
+        brightness: Union[float, Tuple[float, float]] = 0.0,
+        contrast: Union[float, Tuple[float, float]] = 0.0,
+        saturation: Union[float, Tuple[float, float]] = 0.0,
+        hue: Union[float, Tuple[float, float]] = 0.0,
+    ):
         super().__init__()
-        self._tvt = torchvision.transforms.ColorJitter(brightness=brightness,
-                                                       contrast=contrast,
-                                                       saturation=saturation,
-                                                       hue=hue)
+        self._tvt = torchvision.transforms.ColorJitter(
+            brightness=brightness, contrast=contrast, saturation=saturation, hue=hue
+        )
         self._brightness = brightness
         self._contrast = contrast
         self._saturation = saturation
@@ -340,12 +347,21 @@ class ColorJitter(TransformerWithMode):
         # indices defines the order of augmentations
         indices = np.random.permutation(4)
 
-        b = np.random.uniform(self._brightness[0], self._brightness[1]) \
-            if isinstance(self._brightness, tuple) else self._brightness
-        c = np.random.uniform(self._contrast[0], self._contrast[1]) \
-            if isinstance(self._contrast, tuple) else self._contrast
-        s = np.random.uniform(self._saturation[0], self._saturation[1]) \
-            if isinstance(self._saturation, tuple) else self._saturation
+        b = (
+            np.random.uniform(self._brightness[0], self._brightness[1])
+            if isinstance(self._brightness, tuple)
+            else self._brightness
+        )
+        c = (
+            np.random.uniform(self._contrast[0], self._contrast[1])
+            if isinstance(self._contrast, tuple)
+            else self._contrast
+        )
+        s = (
+            np.random.uniform(self._saturation[0], self._saturation[1])
+            if isinstance(self._saturation, tuple)
+            else self._saturation
+        )
         h = np.random.uniform(self._hue[0], self._hue[1]) if isinstance(self._hue, tuple) else self._hue
 
         return indices, b, c, s, h

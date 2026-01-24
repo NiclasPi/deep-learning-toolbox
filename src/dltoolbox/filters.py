@@ -1,13 +1,13 @@
+from typing import Literal, Tuple, Union
+
 import numpy as np
 import torch
 
-from typing import Literal, Tuple, Union
-
 
 def fft_radial_frequency_matrix(
-        fft_data: Union[np.ndarray, torch.Tensor],
-        fft_dim: Tuple[int, ...],
-        is_centered: bool = False,  # frequencies have been zero centered (image mean is in the center)
+    fft_data: Union[np.ndarray, torch.Tensor],
+    fft_dim: Tuple[int, ...],
+    is_centered: bool = False,  # frequencies have been zero centered (image mean is in the center)
 ) -> Union[np.ndarray, torch.Tensor]:
     radial_freq: Union[np.ndarray, torch.Tensor]
     if isinstance(fft_data, np.ndarray):
@@ -34,9 +34,7 @@ def fft_radial_frequency_matrix(
     return radial_freq
 
 
-def fft_get_maximum_radial_frequency(
-        radial_matrix: Union[np.ndarray, torch.Tensor],
-) -> float:
+def fft_get_maximum_radial_frequency(radial_matrix: Union[np.ndarray, torch.Tensor]) -> float:
     if isinstance(radial_matrix, np.ndarray):
         return np.max(radial_matrix)
     elif isinstance(radial_matrix, torch.Tensor):
@@ -46,12 +44,12 @@ def fft_get_maximum_radial_frequency(
 
 
 def fft_low_pass_filter_mask(
-        *,
-        radial_matrix: Union[np.ndarray, torch.Tensor],
-        cutoff_freq: float,
-        transition_width: float = 0.1,
-        slope_type: Literal["linear", "gentle", "steep"] = "linear",
-        slope_multiplier: float = 2.0,
+    *,
+    radial_matrix: Union[np.ndarray, torch.Tensor],
+    cutoff_freq: float,
+    transition_width: float = 0.1,
+    slope_type: Literal["linear", "gentle", "steep"] = "linear",
+    slope_multiplier: float = 2.0,
 ) -> Union[np.ndarray, torch.Tensor]:
     """Returns filter mask for the low-pass filter."""
 
@@ -69,17 +67,17 @@ def fft_low_pass_filter_mask(
     if slope_type == "gentle":
         transition = transition ** (1 / slope_multiplier)
     elif slope_type == "steep":
-        transition = transition ** slope_multiplier
+        transition = transition**slope_multiplier
     return transition
 
 
 def fft_high_pass_filter_mask(
-        *,
-        radial_matrix: Union[np.ndarray, torch.Tensor],
-        cutoff_freq: float,
-        transition_width: float = 0.1,
-        slope_type: Literal["linear", "gentle", "steep"] = "linear",
-        slope_multiplier: float = 2.0,
+    *,
+    radial_matrix: Union[np.ndarray, torch.Tensor],
+    cutoff_freq: float,
+    transition_width: float = 0.1,
+    slope_type: Literal["linear", "gentle", "steep"] = "linear",
+    slope_multiplier: float = 2.0,
 ) -> Union[np.ndarray, torch.Tensor]:
     """Returns filter mask for the high-pass filter."""
 
@@ -97,5 +95,5 @@ def fft_high_pass_filter_mask(
     if slope_type == "gentle":
         transition = transition ** (1 / slope_multiplier)
     elif slope_type == "steep":
-        transition = transition ** slope_multiplier
+        transition = transition**slope_multiplier
     return transition

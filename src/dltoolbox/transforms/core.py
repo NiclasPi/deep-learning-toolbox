@@ -1,12 +1,12 @@
-import numpy as np
-import torch
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, Iterable, List, Optional, Union
 
+import numpy as np
+import torch
 
 Transformer = Callable[
     [Union[np.ndarray, torch.Tensor, Dict[str, Union[np.ndarray, torch.Tensor]]]],
-    Union[np.ndarray, torch.Tensor, Dict[str, Union[np.ndarray, torch.Tensor]]]
+    Union[np.ndarray, torch.Tensor, Dict[str, Union[np.ndarray, torch.Tensor]]],
 ]
 
 

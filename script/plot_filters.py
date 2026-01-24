@@ -1,29 +1,27 @@
 import argparse
+
 import matplotlib.pyplot as plt
 import numpy as np
-
 from PIL import Image
 
-from dltoolbox.filters import fft_radial_frequency_matrix, fft_low_pass_filter_mask, fft_high_pass_filter_mask
+from dltoolbox.filters import fft_high_pass_filter_mask, fft_low_pass_filter_mask, fft_radial_frequency_matrix
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--fft-shift",
-        action="store_true",
-        help="Shift the zero-frequency component to the center of the spectrum."
+        "--fft-shift", action="store_true", help="Shift the zero-frequency component to the center of the spectrum."
     )
     parser.add_argument(
         "--cutoff-frequency",
         type=float,
         default=0.5,
-        help="The filter's cutoff frequency normalized to [0.0, 1.0] (default: 0.5)."
+        help="The filter's cutoff frequency normalized to [0.0, 1.0] (default: 0.5).",
     )
     parser.add_argument(
         "--slope-type",
         choices=["linear", "gentle", "steep"],
         default="linear",
-        help="The type of slope to use (default: linear)."
+        help="The type of slope to use (default: linear).",
     )
     args = parser.parse_args()
 
@@ -38,26 +36,20 @@ if __name__ == "__main__":
     radius = fft_radial_frequency_matrix(fft, (0, 1), is_centered=args.fft_shift is True)
 
     mask_LP = fft_low_pass_filter_mask(
-        radial_matrix=radius,
-        cutoff_freq=args.cutoff_frequency,
-        slope_type=args.slope_type,
+        radial_matrix=radius, cutoff_freq=args.cutoff_frequency, slope_type=args.slope_type
     )
     mask_HP = fft_high_pass_filter_mask(
-        radial_matrix=radius,
-        cutoff_freq=args.cutoff_frequency,
-        slope_type=args.slope_type,
+        radial_matrix=radius, cutoff_freq=args.cutoff_frequency, slope_type=args.slope_type
     )
 
     filtered_LP = fft * mask_LP
     filtered_HP = fft * mask_HP
 
     reconstructed_LP = np.fft.ifftn(
-        np.fft.ifftshift(filtered_LP) if args.fft_shift else filtered_LP,
-        axes=(0, 1),
+        np.fft.ifftshift(filtered_LP) if args.fft_shift else filtered_LP, axes=(0, 1)
     ).real.astype(np.uint8)
     reconstructed_HP = np.fft.ifftn(
-        np.fft.ifftshift(filtered_HP) if args.fft_shift else filtered_HP,
-        axes=(0, 1),
+        np.fft.ifftshift(filtered_HP) if args.fft_shift else filtered_HP, axes=(0, 1)
     ).real.astype(np.uint8)
 
     # plot the results

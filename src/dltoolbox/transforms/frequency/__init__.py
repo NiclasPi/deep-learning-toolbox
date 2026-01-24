@@ -1,4 +1,1 @@
-from dltoolbox.transforms.frequency.fourier import (
-    FFT,
-    DCT,
-)
+from dltoolbox.transforms.frequency.fourier import DCT, FFT

@@ -1,14 +1,16 @@
-import pytest
-import torch
 from itertools import batched
 from typing import Optional, Tuple
 
+import pytest
+import torch
+
 from dltoolbox.normalization import WelfordEstimator
+
 
 class TestNormalization:
     @pytest.mark.parametrize("shape", [(100, 2, 8192), (50, 3, 128, 128), (50, 3, 64, 16, 16)])
     @pytest.mark.parametrize("dim", [None, (0,), (0, 1), (0, 2)])
-    def test_welford(self, shape: Tuple[int, ...], dim: Optional[Tuple[int, ...]])-> None:
+    def test_welford(self, shape: Tuple[int, ...], dim: Optional[Tuple[int, ...]]) -> None:
         dataset = torch.rand(shape, dtype=torch.float32)
 
         welford = WelfordEstimator(dim=dim)

@@ -1,20 +1,22 @@
-import psutil
 from dataclasses import dataclass
+
+import psutil
 
 
 @dataclass(frozen=True, kw_only=True)
 class MultiprocessConfig:
     """Configuration for efficient multiprocessing."""
+
     max_processes: int
     max_memory_per_process: int  # in bytes
 
 
 def get_multiprocess_config(
-        *,
-        memory_utilization_limit: float = 0.8,
-        max_available_memory: int | None = None,
-        max_workers: int | None = None,
-        physical_cores_only: bool = False,
+    *,
+    memory_utilization_limit: float = 0.8,
+    max_available_memory: int | None = None,
+    max_workers: int | None = None,
+    physical_cores_only: bool = False,
 ) -> MultiprocessConfig:
     """
     Compute a multiprocessing configuration by distributing system resources
@@ -42,7 +44,4 @@ def get_multiprocess_config(
 
     available_memory_per_process = available_memory // available_cpus
 
-    return MultiprocessConfig(
-        max_processes=available_cpus,
-        max_memory_per_process=available_memory_per_process,
-    )
+    return MultiprocessConfig(max_processes=available_cpus, max_memory_per_process=available_memory_per_process)

@@ -28,14 +28,14 @@ class BatchProcessItemError(Exception):
 
 
 def process_batch(
-        *,
-        free_slots_queue: Queue,
-        worker_results_queue: Queue,
-        batch_id: int,
-        sample_paths: list[Path],
-        sample_shape: tuple[int, ...],
-        sample_dtype: np.dtype,
-        loader_func: Callable[[Path], np.ndarray],
+    *,
+    free_slots_queue: Queue,
+    worker_results_queue: Queue,
+    batch_id: int,
+    sample_paths: list[Path],
+    sample_shape: tuple[int, ...],
+    sample_dtype: np.dtype,
+    loader_func: Callable[[Path], np.ndarray],
 ) -> None:
     slot_id: str | None = None
     shared_memory: SharedMemory | None = None
@@ -45,11 +45,7 @@ def process_batch(
             worker_results_queue.put(("cancel", batch_id, slot_id))
             return
         shared_memory = SharedMemory(name=f"create_dataset_{slot_id}")
-        batch_array = np.ndarray(
-            shape=(len(sample_paths), *sample_shape),
-            dtype=sample_dtype,
-            buffer=shared_memory.buf,
-        )
+        batch_array = np.ndarray(shape=(len(sample_paths), *sample_shape), dtype=sample_dtype, buffer=shared_memory.buf)
         current_index = 0
         encountered_errors = []
         for sample_path in sample_paths:
@@ -57,9 +53,7 @@ def process_batch(
                 batch_array[current_index] = loader_func(sample_path)
                 current_index += 1
             except Exception as error:
-                encountered_errors.append(
-                    BatchProcessItemError(sample_path, error)
-                )
+                encountered_errors.append(BatchProcessItemError(sample_path, error))
         worker_results_queue.put(("ok", batch_id, slot_id, current_index, encountered_errors))
     except Exception as error:
         tb = traceback.format_exc()
@@ -70,17 +64,17 @@ def process_batch(
 
 
 def create_dataset(
-        *,
-        h5_file: h5py.File,
-        sample_paths: list[Path],
-        sample_shape: tuple[int, ...],
-        sample_dtype: np.dtype,
-        loader_func: Callable[[Path], np.ndarray],
-        dataset_key: str = "data",
-        h5_compression: str | None = None,
-        h5_compression_opts: Any | None = None,
-        max_memory: int | None = None,
-        max_workers: int | None = None,
+    *,
+    h5_file: h5py.File,
+    sample_paths: list[Path],
+    sample_shape: tuple[int, ...],
+    sample_dtype: np.dtype,
+    loader_func: Callable[[Path], np.ndarray],
+    dataset_key: str = "data",
+    h5_compression: str | None = None,
+    h5_compression_opts: Any | None = None,
+    max_memory: int | None = None,
+    max_workers: int | None = None,
 ) -> tuple[list[Path], list[BatchProcessItemError]]:
     """Populate an HDF5 dataset in parallel from a list of sample file paths.
 
@@ -126,7 +120,7 @@ def create_dataset(
     sample_bytes = np.empty(sample_shape, dtype=sample_dtype).nbytes
     batch_size = min(
         mp_cfg.max_memory_per_process // sample_bytes,  # hard memory per worker constraint
-        num_samples // mp_cfg.max_processes  # even worker distribution
+        num_samples // mp_cfg.max_processes,  # even worker distribution
     )
 
     dataset = h5_file.create_dataset(
@@ -146,19 +140,12 @@ def create_dataset(
     # for every worker process we create a shared memory that fits a batch sized samples array
     slot_ids: list[str] = [uuid4().hex[:6] for _ in range(mp_cfg.max_processes)]
     for slot_id in slot_ids:
-        shared_memory = SharedMemory(
-            name=f"create_dataset_{slot_id}",
-            create=True,
-            size=batch_size * sample_bytes,
-        )
+        shared_memory = SharedMemory(name=f"create_dataset_{slot_id}", create=True, size=batch_size * sample_bytes)
         shared_memory.close()
         free_slots_queue.put(slot_id)
 
     # batch start indices
-    batch_start_map: dict[int, int] = {
-        b_id: b_start
-        for b_id, b_start in enumerate(range(0, num_samples, batch_size))
-    }
+    batch_start_map: dict[int, int] = {b_id: b_start for b_id, b_start in enumerate(range(0, num_samples, batch_size))}
     # batch item errors
     batch_item_errors: list[BatchProcessItemError] = []
     # sample paths that match the exact order in which samples were written to the dataset
@@ -175,7 +162,7 @@ def create_dataset(
                     free_slots_queue=free_slots_queue,
                     worker_results_queue=worker_results_queue,
                     batch_id=batch_id,
-                    sample_paths=sample_paths[batch_start:batch_start + batch_size],
+                    sample_paths=sample_paths[batch_start : batch_start + batch_size],
                     sample_shape=sample_shape,
                     sample_dtype=sample_dtype,
                     loader_func=loader_func,
@@ -201,12 +188,9 @@ def create_dataset(
 
                         # extend the ordered sample paths list
                         batch_start_index = batch_start_map[batch_id]
-                        batch_samples = sample_paths[batch_start_index:batch_start_index + batch_size]
+                        batch_samples = sample_paths[batch_start_index : batch_start_index + batch_size]
                         for batch_sample in batch_samples:
-                            if not any(
-                                    batch_sample.samefile(item_error.file_path)
-                                    for item_error in item_errors
-                            ):
+                            if not any(batch_sample.samefile(item_error.file_path) for item_error in item_errors):
                                 sample_paths_in_order.append(batch_sample)
 
                         # extend item errors
@@ -215,9 +199,7 @@ def create_dataset(
                         # get the view into the shared memory for that slot
                         shared_memory = SharedMemory(name=f"create_dataset_{slot_id}")
                         batch_array = np.ndarray(
-                            shape=(actual_count, *sample_shape),
-                            dtype=sample_dtype,
-                            buffer=shared_memory.buf,
+                            shape=(actual_count, *sample_shape), dtype=sample_dtype, buffer=shared_memory.buf
                         )
 
                         # store the result

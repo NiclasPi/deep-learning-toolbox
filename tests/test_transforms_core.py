@@ -1,10 +1,10 @@
+from typing import Tuple, Union
+
 import numpy as np
 import pytest
 import torch
-from typing import Tuple, Union
 
 import dltoolbox.transforms as tfs
-
 from tests.utils import transform_create_input
 
 
@@ -19,14 +19,7 @@ class TestTransforms:
 
         tf1 = SomeTransform()
         tf2 = SomeTransform()
-        nest = tfs.ComposeWithMode([
-            tfs.NoTransform(),
-            tf1,
-            tfs.ComposeWithMode([
-                tfs.NoTransform(),
-                tf2
-            ])
-        ])
+        nest = tfs.ComposeWithMode([tfs.NoTransform(), tf1, tfs.ComposeWithMode([tfs.NoTransform(), tf2])])
 
         nest.set_eval_mode()
         assert tf1.is_eval_mode()

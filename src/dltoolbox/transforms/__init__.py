@@ -1,17 +1,3 @@
-from dltoolbox.transforms.core import (
-    Transformer,
-    TransformerMode,
-    TransformerBase,
-    TransformerWithMode,
-    Compose,
-    ComposeWithMode,
-    NoTransform,
-    ToTensor,
-    DictTransformCreate,
-    DictTransformClone,
-    DictTransformApply,
-)
-
 from dltoolbox.transforms.audio import (
     AudioCodecCompression,
     ConvertToFloat32,
@@ -20,32 +6,30 @@ from dltoolbox.transforms.audio import (
     RandomAttenuation,
     RandomSlice,
 )
-
-from dltoolbox.transforms.frequency import (
-    FFT,
-    DCT,
+from dltoolbox.transforms.core import (
+    Compose,
+    ComposeWithMode,
+    DictTransformApply,
+    DictTransformClone,
+    DictTransformCreate,
+    NoTransform,
+    ToTensor,
+    Transformer,
+    TransformerBase,
+    TransformerMode,
+    TransformerWithMode,
 )
-
+from dltoolbox.transforms.frequency import DCT, FFT
 from dltoolbox.transforms.image import (
-    RandomCrop,
-    RandomPatchesInGrid,
-    RandomFlip,
-    RandomRotate90,
-    RandomErasing,
-    RandomNoise,
+    ColorJitter,
     GaussianBlur,
     JPEGCompression,
-    ColorJitter,
+    RandomCrop,
+    RandomErasing,
+    RandomFlip,
+    RandomNoise,
+    RandomPatchesInGrid,
+    RandomRotate90,
 )
-
-from dltoolbox.transforms.random import (
-    RandomChoices,
-)
-
-from dltoolbox.transforms.universal import (
-    Normalize,
-    Flip,
-    Pad,
-    Permute,
-    Reshape,
-)
+from dltoolbox.transforms.random import RandomChoices
+from dltoolbox.transforms.universal import Flip, Normalize, Pad, Permute, Reshape

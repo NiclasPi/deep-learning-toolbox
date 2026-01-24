@@ -4,10 +4,7 @@ from PIL.Image import Image
 
 
 def calculate_crop_box(
-        *,
-        image_size: int | tuple[int, int],
-        target_size: int | tuple[int, int],
-        randomized_crop: bool = False,
+    *, image_size: int | tuple[int, int], target_size: int | tuple[int, int], randomized_crop: bool = False
 ) -> tuple[int, int, int, int]:
     """Compute the crop box for the provided target size.
 
@@ -42,12 +39,7 @@ def calculate_crop_box(
     return x, y, x + target_width, y + target_height
 
 
-def crop_image(
-        *,
-        image: Image,
-        target_shape: int | tuple[int, int],
-        randomized_crop: bool = False,
-) -> Image:
+def crop_image(*, image: Image, target_shape: int | tuple[int, int], randomized_crop: bool = False) -> Image:
     """Crop the given image and return the cropped image.
 
     Args:
@@ -60,7 +52,5 @@ def crop_image(
     Returns:
         A new image resized to cover the target size while maintaining aspect ratio.
     """
-    crop_box = calculate_crop_box(
-        image_size=image.size, target_size=target_shape, randomized_crop=randomized_crop
-    )
+    crop_box = calculate_crop_box(image_size=image.size, target_size=target_shape, randomized_crop=randomized_crop)
     return image.crop(crop_box)

@@ -1,18 +1,15 @@
-import pytest
 from typing import Literal, Tuple
 
+import pytest
+
 import dltoolbox.transforms as tfs
-from tests.utils import transform_set_mode, transform_create_input
+from tests.utils import transform_create_input, transform_set_mode
 
 
 class TestTransformsAudio:
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     @pytest.mark.parametrize("shape", [(1, 32), (2, 32)])
-    def test_invert_phase(
-            self,
-            backend: Literal["numpy", "torch"],
-            shape: Tuple[int, ...],
-    ) -> None:
+    def test_invert_phase(self, backend: Literal["numpy", "torch"], shape: Tuple[int, ...]) -> None:
         tf = tfs.InvertPhase()
 
         x = transform_create_input(backend, shape)
@@ -33,11 +30,7 @@ class TestTransformsAudio:
     @pytest.mark.parametrize("shape", [(1, 32), (2, 32)])
     @pytest.mark.parametrize("size", [16, 9])
     def test_random_slice(
-            self,
-            mode: Literal["train", "eval"],
-            backend: Literal["numpy", "torch"],
-            shape: Tuple[int, ...],
-            size: int,
+        self, mode: Literal["train", "eval"], backend: Literal["numpy", "torch"], shape: Tuple[int, ...], size: int
     ) -> None:
         tf = tfs.RandomSlice(size=size)
         transform_set_mode(tf, mode)

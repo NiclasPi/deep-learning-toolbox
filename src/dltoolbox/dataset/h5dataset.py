@@ -1,8 +1,9 @@
+from typing import Any, Literal, Optional, Sequence, Tuple, Union
+
 import h5py
 import numpy as np
 from torch import Tensor
 from torch.utils.data import Dataset
-from typing import Any, Literal, Optional, Sequence, Tuple, Union
 
 from dltoolbox.transforms import Transformer
 
@@ -10,17 +11,18 @@ from dltoolbox.transforms import Transformer
 class H5DatasetDisk(Dataset):
     """HDF5 dataset class that reads from disk when indexed"""
 
-    def __init__(self,
-                 h5_path: str,
-                 h5_data_key: str = "data",
-                 h5_label_key: str = "labels",
-                 select_indices: Optional[Sequence[int]] = None,
-                 static_label: Optional[Union[np.ndarray, Tensor]] = None,
-                 data_row_dim: int = 0,
-                 label_row_dim: int = 0,
-                 data_transform: Optional[Transformer] = None,
-                 label_transform: Optional[Transformer] = None,
-                 ) -> None:
+    def __init__(
+        self,
+        h5_path: str,
+        h5_data_key: str = "data",
+        h5_label_key: str = "labels",
+        select_indices: Optional[Sequence[int]] = None,
+        static_label: Optional[Union[np.ndarray, Tensor]] = None,
+        data_row_dim: int = 0,
+        label_row_dim: int = 0,
+        data_transform: Optional[Transformer] = None,
+        label_transform: Optional[Transformer] = None,
+    ) -> None:
         self.h5_data_key = h5_data_key
         self.h5_label_key = h5_label_key
         self.selected_indices = select_indices
@@ -80,8 +82,11 @@ class H5DatasetDisk(Dataset):
             index = self.selected_indices[index]
 
         data = self._h5_take(self._data(), index, axis=self.data_row_dim)
-        label = self.static_label if self.static_label is not None else self._h5_take(self._labels(), index,
-                                                                                      axis=self.label_row_dim)
+        label = (
+            self.static_label
+            if self.static_label is not None
+            else self._h5_take(self._labels(), index, axis=self.label_row_dim)
+        )
 
         if self.data_transform is not None:
             data = self.data_transform(data)
@@ -94,17 +99,18 @@ class H5DatasetDisk(Dataset):
 class H5DatasetMemory(Dataset):
     """HDF5 dataset class that reads the entire dataset into main memory"""
 
-    def __init__(self,
-                 h5_path: str,
-                 h5_data_key: str = "data",
-                 h5_label_key: str = "labels",
-                 select_indices: Optional[Sequence[int]] = None,
-                 static_label: Optional[Union[np.ndarray, Tensor]] = None,
-                 data_row_dim: int = 0,
-                 label_row_dim: int = 0,
-                 data_transform: Optional[Transformer] = None,
-                 label_transform: Optional[Transformer] = None,
-                 ) -> None:
+    def __init__(
+        self,
+        h5_path: str,
+        h5_data_key: str = "data",
+        h5_label_key: str = "labels",
+        select_indices: Optional[Sequence[int]] = None,
+        static_label: Optional[Union[np.ndarray, Tensor]] = None,
+        data_row_dim: int = 0,
+        label_row_dim: int = 0,
+        data_transform: Optional[Transformer] = None,
+        label_transform: Optional[Transformer] = None,
+    ) -> None:
         self.data: np.array
         self.labels: np.array
         self.static_label = static_label
@@ -174,8 +180,9 @@ class H5DatasetMemory(Dataset):
 
     def __getitem__(self, index: int) -> Tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor]]:
         data = np.take(self.data, index, axis=self.data_row_dim)
-        label = self.static_label if self.static_label is not None else np.take(self.labels, index,
-                                                                                axis=self.label_row_dim)
+        label = (
+            self.static_label if self.static_label is not None else np.take(self.labels, index, axis=self.label_row_dim)
+        )
 
         if self.data_transform is not None:
             data = self.data_transform(data)
@@ -186,38 +193,43 @@ class H5DatasetMemory(Dataset):
 
 
 class H5Dataset(Dataset):
-    def __init__(self,
-                 mode: Literal["disk", "memory"],
-                 h5_path: str,
-                 h5_data_key: str = "data",
-                 h5_label_key: str = "labels",
-                 select_indices: Optional[Sequence[int]] = None,
-                 static_label: Optional[Union[np.ndarray, Tensor]] = None,
-                 data_row_dim: int = 0,
-                 label_row_dim: int = 0,
-                 data_transform: Optional[Transformer] = None,
-                 label_transform: Optional[Transformer] = None,
-                 ) -> None:
+    def __init__(
+        self,
+        mode: Literal["disk", "memory"],
+        h5_path: str,
+        h5_data_key: str = "data",
+        h5_label_key: str = "labels",
+        select_indices: Optional[Sequence[int]] = None,
+        static_label: Optional[Union[np.ndarray, Tensor]] = None,
+        data_row_dim: int = 0,
+        label_row_dim: int = 0,
+        data_transform: Optional[Transformer] = None,
+        label_transform: Optional[Transformer] = None,
+    ) -> None:
         if mode == "disk":
-            self._instance = H5DatasetDisk(h5_path=h5_path,
-                                           h5_data_key=h5_data_key,
-                                           h5_label_key=h5_label_key,
-                                           select_indices=select_indices,
-                                           static_label=static_label,
-                                           data_row_dim=data_row_dim,
-                                           label_row_dim=label_row_dim,
-                                           data_transform=data_transform,
-                                           label_transform=label_transform)
+            self._instance = H5DatasetDisk(
+                h5_path=h5_path,
+                h5_data_key=h5_data_key,
+                h5_label_key=h5_label_key,
+                select_indices=select_indices,
+                static_label=static_label,
+                data_row_dim=data_row_dim,
+                label_row_dim=label_row_dim,
+                data_transform=data_transform,
+                label_transform=label_transform,
+            )
         elif mode == "memory":
-            self._instance = H5DatasetMemory(h5_path=h5_path,
-                                             h5_data_key=h5_data_key,
-                                             h5_label_key=h5_label_key,
-                                             select_indices=select_indices,
-                                             static_label=static_label,
-                                             data_row_dim=data_row_dim,
-                                             label_row_dim=label_row_dim,
-                                             data_transform=data_transform,
-                                             label_transform=label_transform)
+            self._instance = H5DatasetMemory(
+                h5_path=h5_path,
+                h5_data_key=h5_data_key,
+                h5_label_key=h5_label_key,
+                select_indices=select_indices,
+                static_label=static_label,
+                data_row_dim=data_row_dim,
+                label_row_dim=label_row_dim,
+                data_transform=data_transform,
+                label_transform=label_transform,
+            )
         else:
             raise ValueError(f'unknown mode "{mode}"')
 
@@ -247,13 +259,14 @@ class H5Dataset(Dataset):
             self.__dict__[key] = value
 
 
-def create_hdf5_file(output_path: str,
-                     data_arr: np.ndarray,
-                     labels_arr: Optional[np.ndarray],
-                     data_key: str = "data",
-                     labels_key: str = "labels",
-                     ub_bytes: Optional[bytes] = None,
-                     ) -> None:
+def create_hdf5_file(
+    output_path: str,
+    data_arr: np.ndarray,
+    labels_arr: Optional[np.ndarray],
+    data_key: str = "data",
+    labels_key: str = "labels",
+    ub_bytes: Optional[bytes] = None,
+) -> None:
     ub_size: int = 0
     if ub_bytes is not None and len(ub_bytes) > 0:
         ub_size = max(512, int(2 ** np.ceil(np.log2(len(ub_bytes)))))

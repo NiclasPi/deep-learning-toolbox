@@ -1,5 +1,6 @@
 from typing import Optional
 
+
 class EarlyStopping:
     """Early stops the training if loss doesn't improve."""
 

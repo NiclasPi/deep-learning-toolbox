@@ -9,12 +9,12 @@ from dltoolbox.images.scale import scale_image
 
 
 def read_audio(
-        file_path: str,
-        target_length: int,  # in samples
-        target_sample_rate: int = 22050,
-        load_offset: float = 0,  # in samples
-        random_sample_slice: bool = False,
-        dtype: np.dtype = np.int16,
+    file_path: str,
+    target_length: int,  # in samples
+    target_sample_rate: int = 22050,
+    load_offset: float = 0,  # in samples
+    random_sample_slice: bool = False,
+    dtype: np.dtype = np.int16,
 ) -> np.ndarray:
     """Load an audio file from disk and return it as a numpy array."""
 
@@ -22,12 +22,7 @@ def read_audio(
         raise ValueError("dtype must be np.int16, np.int32, np.float32, or np.float64")
 
     # returns array of shape (samples, channels)
-    audio_data, sample_rate = sf.read(
-        file=file_path,
-        start=load_offset,
-        dtype=dtype,
-        always_2d=True,
-    )
+    audio_data, sample_rate = sf.read(file=file_path, start=load_offset, dtype=dtype, always_2d=True)
 
     if sample_rate != target_sample_rate:
         # needs resampling
@@ -52,7 +47,7 @@ def read_audio(
     # resize to target size
     if random_sample_slice and audio_length > target_length:
         idx = np.random.randint(audio_length - target_length)
-        audio_data = audio_data[:, idx: idx + target_length]
+        audio_data = audio_data[:, idx : idx + target_length]
     else:
         audio_data = audio_data[:, :target_length]
 
@@ -60,11 +55,7 @@ def read_audio(
 
 
 def read_image(
-        file_path: str,
-        target_size: int | tuple[int, int],
-        *,
-        randomized_crop: bool = False,
-        scale_to_fit: bool = False,
+    file_path: str, target_size: int | tuple[int, int], *, randomized_crop: bool = False, scale_to_fit: bool = False
 ) -> np.ndarray:
     """Load an image file from disk and return it as a numpy array.
 
@@ -87,9 +78,8 @@ def read_image(
     if scale_to_fit:
         image = scale_image(image=image, target_size=target_size)
 
-    if (
-            image.width < (target_size[0] if isinstance(target_size, tuple) else target_size) or
-            image.height < (target_size[1] if isinstance(target_size, tuple) else target_size)
+    if image.width < (target_size[0] if isinstance(target_size, tuple) else target_size) or image.height < (
+        target_size[1] if isinstance(target_size, tuple) else target_size
     ):
         raise ImageTooSmallError(image.size, target_size)
 
