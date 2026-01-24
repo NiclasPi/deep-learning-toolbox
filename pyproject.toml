@@ -43,13 +43,69 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "nox"]
-test = ["pytest", "nox"]
+cpu = [
+    "torch>=2.1.2",
+    "torchvision",
+]
+cu130 = [
+    "torch>=2.1.2",
+    "torchvision",
+]
+dev = [
+    "pytest",
+    "ruff",
+]
 
-[tool.isort]
-py_version=311
-line_length=120
-force_alphabetical_sort_within_sections=true
+[tool.uv]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu130" },
+  ],
+]
 
-[tool.black]
-line_length=120
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform != 'darwin'" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform != 'darwin'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+python_files = "test*.py"
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
