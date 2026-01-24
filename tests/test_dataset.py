@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 import torch
 
-from dltoolbox.dataset import H5Dataset, H5DatasetDisk, H5DatasetMemory, create_hdf5_file
+from dltoolbox.dataset.errors import H5DatasetMissingKeyError
+from dltoolbox.dataset.h5dataset import H5Dataset, H5DatasetDisk, H5DatasetMemory, create_hdf5_file
 from dltoolbox.transforms import ToTensor
 
 
@@ -29,7 +30,7 @@ def create_temporary_hdf5(data_shape, labels_shape) -> Tuple[tempfile.NamedTempo
         data = np.random.randn(*data_shape).astype(np.float16)
         labels = np.random.randn(*labels_shape).astype(np.float16)
 
-        create_hdf5_file(tmp_file.name, data, labels, ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8"))
+        create_hdf5_file(tmp_file.name, data, labels, user_block=bytes("Hello from HDF5 user block!", encoding="utf-8"))
 
         yield tmp_file, data, labels
     finally:
@@ -46,7 +47,7 @@ def create_temporary_hdf5_data_only(data_shape) -> Tuple[tempfile.NamedTemporary
         data = np.random.randn(*data_shape).astype(np.float16)
 
         create_hdf5_file(
-            tmp_file.name, data, labels_arr=None, ub_bytes=bytes("Hello from HDF5 user block!", encoding="utf-8")
+            tmp_file.name, data, labels_arr=None, user_block=bytes("Hello from HDF5 user block!", encoding="utf-8")
         )
 
         yield tmp_file, data
@@ -112,7 +113,7 @@ class TestDataset:
         h5_file, data, labels = create_temporary_hdf5
         dataset = H5Dataset(mode, h5_file.name)
         assert len(dataset) == data.shape[0]
-        sample, label = dataset[0]
+        sample, label, _ = dataset[0]
         assert sample.shape == tuple([s for d, s in enumerate(data.shape) if d != 0])
         assert label.shape == tuple([s for d, s in enumerate(labels.shape) if d != 0])
         assert np.allclose(np.take(data, 0, axis=0), sample)
@@ -123,13 +124,13 @@ class TestDataset:
         h5_file, data = create_temporary_hdf5_data_only
         dataset = H5Dataset(mode, h5_file.name, static_label=np.array([0], dtype=np.float32))
         assert len(dataset) == data.shape[0]
-        sample, label = dataset[0]
+        sample, label, _ = dataset[0]
         assert sample.shape == tuple([s for d, s in enumerate(data.shape) if d != 0])
         assert label.shape == (1,)
         assert np.allclose(np.take(data, 0, axis=0), sample)
         assert np.allclose(0, label)
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(H5DatasetMissingKeyError):
             # raises because hdf5 file does not contain labels, and we are not providing a static label
             H5Dataset(mode, h5_file.name)
 
@@ -146,6 +147,6 @@ class TestDataset:
         h5_file, data, labels = create_temporary_hdf5
         dataset = H5Dataset(mode, h5_file.name, data_transform=ToTensor(), label_transform=ToTensor())
         assert len(dataset) == data.shape[0]
-        sample, label = dataset[0]
+        sample, label, _ = dataset[0]
         assert isinstance(sample, torch.Tensor)
         assert isinstance(label, torch.Tensor)

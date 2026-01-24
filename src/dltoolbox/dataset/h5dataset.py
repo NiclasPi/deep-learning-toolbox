@@ -1,10 +1,12 @@
-from typing import Any, Literal, Optional, Sequence, Tuple, Union
+from typing import Any, Literal, Optional, Sequence, Tuple, Type, Union
 
 import h5py
 import numpy as np
 from torch import Tensor
 from torch.utils.data import Dataset
 
+from dltoolbox.dataset.errors import H5DatasetMissingKeyError, H5DatasetShapeMismatchError
+from dltoolbox.dataset.metadata import DatasetMetadata
 from dltoolbox.transforms import Transformer
 
 
@@ -44,10 +46,15 @@ class H5DatasetDisk(Dataset):
                 self._ub_bytes = h5_file.read(self._ub_size)
 
         self.h5_file = h5py.File(h5_path, "r")
-        assert h5_data_key in self.h5_file and type(self.h5_file[h5_data_key]) == h5py.Dataset
+        if h5_data_key not in self.h5_file:
+            raise H5DatasetMissingKeyError(h5_data_key)
         if self.static_label is None:
-            assert h5_label_key in self.h5_file and type(self.h5_file[h5_label_key]) == h5py.Dataset
-            assert self.h5_file[h5_data_key].shape[data_row_dim] == self.h5_file[h5_label_key].shape[label_row_dim]
+            if h5_label_key not in self.h5_file:
+                raise H5DatasetMissingKeyError(h5_label_key)
+            if self.h5_file[h5_data_key].shape[data_row_dim] != self.h5_file[h5_label_key].shape[label_row_dim]:
+                raise H5DatasetShapeMismatchError(
+                    self.h5_file[h5_data_key].shape[data_row_dim], self.h5_file[h5_label_key].shape[label_row_dim]
+                )
 
         self.h5_data_len: int
         if select_indices is not None:
@@ -62,7 +69,7 @@ class H5DatasetDisk(Dataset):
         return self.h5_file[self.h5_label_key]
 
     @staticmethod
-    def _h5_take(dataset: h5py.Dataset, index: int, axis: int) -> np.array:
+    def _h5_take(dataset: h5py.Dataset, index: int, axis: int) -> np.ndarray:
         slices = [index if d == axis else slice(None) for d in range(dataset.ndim)]
         return dataset[tuple(slices)]
 
@@ -99,6 +106,9 @@ class H5DatasetDisk(Dataset):
 class H5DatasetMemory(Dataset):
     """HDF5 dataset class that reads the entire dataset into main memory"""
 
+    data: np.ndarray
+    labels: Optional[np.ndarray]
+
     def __init__(
         self,
         h5_path: str,
@@ -111,8 +121,6 @@ class H5DatasetMemory(Dataset):
         data_transform: Optional[Transformer] = None,
         label_transform: Optional[Transformer] = None,
     ) -> None:
-        self.data: np.array
-        self.labels: np.array
         self.static_label = static_label
         self.data_row_dim: int = data_row_dim
         self.label_row_dim: int = label_row_dim
@@ -131,10 +139,15 @@ class H5DatasetMemory(Dataset):
                 self._ub_bytes = h5_file.read(self._ub_size)
 
         with h5py.File(h5_path, "r") as h5_file:
-            assert h5_data_key in h5_file and type(h5_file[h5_data_key]) == h5py.Dataset
+            if h5_data_key not in h5_file:
+                raise H5DatasetMissingKeyError(h5_data_key)
             if self.static_label is None:
-                assert h5_label_key in h5_file and type(h5_file[h5_label_key]) == h5py.Dataset
-                assert h5_file[h5_data_key].shape[data_row_dim] == h5_file[h5_label_key].shape[label_row_dim]
+                if h5_label_key not in h5_file:
+                    raise H5DatasetMissingKeyError(h5_label_key)
+                if h5_file[h5_data_key].shape[data_row_dim] != h5_file[h5_label_key].shape[label_row_dim]:
+                    raise H5DatasetShapeMismatchError(
+                        h5_file[h5_data_key].shape[data_row_dim], h5_file[h5_label_key].shape[label_row_dim]
+                    )
 
             h5_data: h5py.Dataset = h5_file[h5_data_key]
             if select_indices is not None:
@@ -166,6 +179,8 @@ class H5DatasetMemory(Dataset):
                     h5_labels.read_direct(self.labels)
 
                 assert self.data.shape[data_row_dim] == self.labels.shape[label_row_dim]
+            else:
+                self.labels = None
 
     @property
     def ub_size(self) -> int:
@@ -192,7 +207,10 @@ class H5DatasetMemory(Dataset):
         return data, label
 
 
-class H5Dataset(Dataset):
+class H5Dataset[T](Dataset):
+    _instance: H5DatasetDisk | H5DatasetMemory
+    _metadata: DatasetMetadata[T] | None
+
     def __init__(
         self,
         mode: Literal["disk", "memory"],
@@ -205,6 +223,8 @@ class H5Dataset(Dataset):
         label_row_dim: int = 0,
         data_transform: Optional[Transformer] = None,
         label_transform: Optional[Transformer] = None,
+        ignore_user_block: bool = True,
+        sample_meta_type: Type[T] | None = None,
     ) -> None:
         if mode == "disk":
             self._instance = H5DatasetDisk(
@@ -233,6 +253,11 @@ class H5Dataset(Dataset):
         else:
             raise ValueError(f'unknown mode "{mode}"')
 
+        if not ignore_user_block:
+            self._metadata = DatasetMetadata.from_json_bytes(self.ub_bytes, sample_meta_type)
+        else:
+            self._metadata = None
+
     @property
     def ub_size(self) -> int:
         return self._instance.ub_size
@@ -244,8 +269,12 @@ class H5Dataset(Dataset):
     def __len__(self) -> int:
         return self._instance.__len__()
 
-    def __getitem__(self, index: int) -> Tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor]]:
-        return self._instance.__getitem__(index)
+    def __getitem__(self, index: int) -> Tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor], T | None]:
+        data, label = self._instance.__getitem__(index)
+        if self._metadata is not None:
+            meta = self._metadata.get_sample_meta_by_index(index)
+            return data, label, meta
+        return data, label, None
 
     def __getattr__(self, name: str) -> Any:
         # delegate attribute access to the instance
@@ -265,10 +294,15 @@ def create_hdf5_file(
     labels_arr: Optional[np.ndarray],
     data_key: str = "data",
     labels_key: str = "labels",
-    ub_bytes: Optional[bytes] = None,
+    user_block: DatasetMetadata | bytes | None = None,
 ) -> None:
     ub_size: int = 0
-    if ub_bytes is not None and len(ub_bytes) > 0:
+    ub_bytes: bytes | None = None
+    if user_block is not None:
+        if isinstance(user_block, DatasetMetadata):
+            ub_bytes = user_block.to_json_bytes()
+        else:
+            ub_bytes = user_block
         ub_size = max(512, int(2 ** np.ceil(np.log2(len(ub_bytes)))))
 
     with h5py.File(output_path, "w", userblock_size=ub_size, libver="latest") as h5_file:
@@ -276,6 +310,6 @@ def create_hdf5_file(
         if labels_arr is not None:
             h5_file.create_dataset(labels_key, data=labels_arr)
 
-    if ub_size > 0:
+    if ub_size > 0 and ub_bytes:
         with open(output_path, "br+") as h5_file:
             h5_file.write(ub_bytes)

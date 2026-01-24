@@ -19,6 +19,28 @@ conflicts = [[
 ]]
 
 [[package]]
+name = "attrs"
+version = "25.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6b/5c/685e6633917e101e5dcb62b9dd76946cbb57c26e133bae9e0cd36033c0a9/attrs-25.4.0.tar.gz", hash = "sha256:16d5969b87f0859ef33a48b35d55ac1be6e42ae49d5e853b597db70c35c57e11", size = 934251, upload-time = "2025-10-06T13:54:44.725Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3a/2a/7cc015f5b9f5db42b7d48157e23356022889fc354a2813c15934b7cb5c0e/attrs-25.4.0-py3-none-any.whl", hash = "sha256:adcf7e2a1fb3b36ac48d97835bb6d8ade15b8dcce26aba8bf1d14847b57a3373", size = 67615, upload-time = "2025-10-06T13:54:43.17Z" },
+]
+
+[[package]]
+name = "cattrs"
+version = "25.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
+    { name = "typing-extensions", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6e/00/2432bb2d445b39b5407f0a90e01b9a271475eea7caf913d7a86bcb956385/cattrs-25.3.0.tar.gz", hash = "sha256:1ac88d9e5eda10436c4517e390a4142d88638fe682c436c93db7ce4a277b884a", size = 509321, upload-time = "2025-10-07T12:26:08.737Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d8/2b/a40e1488fdfa02d3f9a653a61a5935ea08b3c2225ee818db6a76c7ba9695/cattrs-25.3.0-py3-none-any.whl", hash = "sha256:9896e84e0a5bf723bc7b4b68f4481785367ce07a8a02e7e9ee6eb2819bc306ff", size = 70738, upload-time = "2025-10-07T12:26:06.603Z" },
+]
+
+[[package]]
 name = "cffi"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -144,6 +166,8 @@ name = "dltoolbox"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
+    { name = "attrs", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
+    { name = "cattrs", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
     { name = "h5py", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
     { name = "numpy", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
     { name = "opencv-python-headless", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
@@ -186,6 +210,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "attrs", specifier = ">=25.4.0" },
+    { name = "cattrs", specifier = ">=25.3.0" },
     { name = "h5py" },
     { name = "numpy" },
     { name = "opencv-python-headless" },
