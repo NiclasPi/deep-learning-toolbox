@@ -1,5 +1,5 @@
 import pytest
-from attrs import frozen
+from attrs import evolve, frozen
 
 from dltoolbox.dataset.metadata import DatasetMetadata
 
@@ -27,3 +27,33 @@ def test_metadata_serialization(sample_meta) -> None:
     meta_serialized = meta.to_json_bytes()
     meta_structured = DatasetMetadata.from_json_bytes(meta_serialized, type(sample_meta))
     assert meta == meta_structured
+
+
+@frozen(kw_only=True)
+class ResolvableSampleMetadata:
+    id: str | None = None
+    name: str
+    size: int
+    confidence: float
+    split: str | None = None
+
+    def resolve(self, sample_id: str, dataset_metadata: DatasetMetadata) -> "ResolvableSampleMetadata":
+        return evolve(self, id=sample_id, split=dataset_metadata.split)
+
+
+def test_resolvable_sample_meta() -> None:
+    meta: DatasetMetadata[ResolvableSampleMetadata] = DatasetMetadata(
+        name="Test Dataset",
+        split="train",
+        origin_path="/path/to/dataset/origin/",
+        sample_ids=["01"],
+        sample_meta={"01": ResolvableSampleMetadata(name="test", size=42, confidence=0.96)},
+    )
+
+    meta_serialized = meta.to_json_bytes()
+    meta_structured = DatasetMetadata.from_json_bytes(meta_serialized, ResolvableSampleMetadata)
+    assert meta == meta_structured
+
+    sample_meta = meta.get_sample_meta_by_id("01")
+    assert sample_meta.id == "01"
+    assert sample_meta.split == "train"

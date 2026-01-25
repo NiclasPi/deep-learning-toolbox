@@ -1,13 +1,28 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal, Type, TypeVar
+from typing import Literal, Protocol, Type, TypeGuard, TypeVar, runtime_checkable
 
 from attrs import field, frozen
 from cattrs.preconf.json import make_converter
 
 T = TypeVar("T")
 _CONVERTER = make_converter()
+
+
+@runtime_checkable
+class ResolvableSampleMeta(Protocol[T]):
+    def resolve(self, sample_id: str, dataset_metadata: DatasetMetadata[T]) -> T: ...
+
+
+def _is_resolvable(obj) -> TypeGuard[ResolvableSampleMeta[T]]:
+    try:
+        if isinstance(obj, ResolvableSampleMeta):
+            return True
+    except Exception:
+        pass
+
+    return hasattr(obj, "resolve") and callable(obj.resolve)
 
 
 @frozen(kw_only=True)
@@ -42,7 +57,11 @@ class DatasetMetadata[T]:
 
     def get_sample_meta_by_id(self, sample_id: str) -> T | None:
         if sample_id in self.sample_meta:
-            return self.sample_meta[sample_id]
+            sample_meta = self.sample_meta[sample_id]
+            if sample_meta is not None:
+                if _is_resolvable(sample_meta):
+                    return sample_meta.resolve(sample_id, self)
+                return sample_meta
         return None
 
     def get_sample_meta_by_index(self, index: int) -> T | None:
