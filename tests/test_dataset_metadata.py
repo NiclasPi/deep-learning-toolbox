@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import pytest
 from attrs import evolve, frozen
 
@@ -11,9 +13,24 @@ class SampleMetadata:
     confidence: float
 
 
+@dataclass(kw_only=True)
+class SampleMetadataDataclass:
+    name: str
+    size: int
+    confidence: float
+
+
 @pytest.mark.parametrize(
     "sample_meta",
-    ["str", 1, 2.3, ["str", 1], {"field": "value"}, SampleMetadata(name="test", size=42, confidence=0.96)],
+    [
+        "str",
+        1,
+        2.3,
+        ["str", 1],
+        {"field": "value"},
+        SampleMetadata(name="test", size=42, confidence=0.96),
+        SampleMetadataDataclass(name="test", size=42, confidence=0.96),
+    ],
 )
 def test_metadata_serialization(sample_meta) -> None:
     meta = DatasetMetadata(

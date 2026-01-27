@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from datetime import UTC, datetime
 from typing import Literal, Protocol, Type, TypeGuard, TypeVar, runtime_checkable
 
@@ -50,6 +52,23 @@ class DatasetMetadata[T]:
     def to_json_bytes(self) -> bytes:
         """Return JSON representation as bytes."""
         return _CONVERTER.dumps(_CONVERTER.unstructure(self)).encode("utf-8")
+
+    @property
+    def filename(self) -> str:
+        """Derive a safe filename from the dataset's name.
+
+        The returned value is not the original source filename but a filesystem-safe identifier
+        derived from `self.name`. Can be used to create new files that are derived from this dataset.
+        """
+        # turn accents into ASCII equivalents and drop non-ASCII
+        s = unicodedata.normalize("NFKD", self.name).encode("ascii", "ignore").decode("ascii")
+        # replace spaces with underscore
+        s = s.replace(" ", "_")
+        # remove any slashes (forward or back)
+        s = re.sub(r"[\\/]", "", s)
+        # add the dataset split indicator
+        s += "__" + self.split
+        return s
 
     @property
     def num_samples(self) -> int:
