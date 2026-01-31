@@ -1,9 +1,9 @@
-from typing import Any, Literal, Optional, Sequence, Tuple, Type, Union
+from typing import Any, Literal, Optional, Sequence, Type, Union
 
 import h5py
 import numpy as np
 from torch import Tensor
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, default_collate
 
 from dltoolbox.dataset.errors import H5DatasetMissingKeyError, H5DatasetShapeMismatchError
 from dltoolbox.dataset.metadata import DatasetMetadata
@@ -84,7 +84,7 @@ class H5DatasetDisk(Dataset):
     def __len__(self) -> int:
         return self.h5_data_len
 
-    def __getitem__(self, index: int) -> Tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor]]:
+    def __getitem__(self, index: int) -> tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor]]:
         if self.selected_indices is not None:
             index = self.selected_indices[index]
 
@@ -193,7 +193,7 @@ class H5DatasetMemory(Dataset):
     def __len__(self) -> int:
         return self.data.shape[self.data_row_dim]
 
-    def __getitem__(self, index: int) -> Tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor]]:
+    def __getitem__(self, index: int) -> tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor]]:
         data = np.take(self.data, index, axis=self.data_row_dim)
         label = (
             self.static_label if self.static_label is not None else np.take(self.labels, index, axis=self.label_row_dim)
@@ -269,7 +269,7 @@ class H5Dataset[T](Dataset):
     def __len__(self) -> int:
         return self._instance.__len__()
 
-    def __getitem__(self, index: int) -> Tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor], T | None]:
+    def __getitem__(self, index: int) -> tuple[Union[np.ndarray, Tensor], Union[np.ndarray, Tensor], T | None]:
         data, label = self._instance.__getitem__(index)
         if self._metadata is not None:
             meta = self._metadata.get_sample_meta_by_index(index)
@@ -286,6 +286,16 @@ class H5Dataset[T](Dataset):
             setattr(self._instance, key, value)
         else:
             self.__dict__[key] = value
+
+    @staticmethod
+    def collate_fn(batch) -> tuple[Any, Any, list[Any]]:
+        """Handle missing metadata or any metadata type by turning them into a list."""
+
+        data, labels, meta = zip(*batch)
+        batched_data = default_collate(data)
+        batched_labels = default_collate(labels)
+        batched_meta = list(meta)
+        return batched_data, batched_labels, batched_meta
 
 
 def create_hdf5_file(
