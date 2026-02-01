@@ -71,6 +71,7 @@ def create_dataset(
     sample_dtype: np.dtype,
     loader_func: Callable[[Path], np.ndarray],
     dataset_key: str = "data",
+    h5_chunk_length: int | None = None,
     h5_compression: str | None = None,
     h5_compression_opts: Any | None = None,
     max_memory: int | None = None,
@@ -95,6 +96,10 @@ def create_dataset(
         dataset_key (str, default="data"):
             The HDF5 dataset key (i.e., the internal path/name under which the dataset is created).
             Must be a valid HDF5 object name (no whitespace or unsupported characters).
+        h5_chunk_length (int, optional):
+            Write the dataset in chunks of shape (chunk_length, *sample_shape) along the first dimension;
+            if None, the dataset is stored contiguously without chunking. Chunking can improve
+            I/O performance and enable efficient partial reads.
         h5_compression (str, optional):
             Name of the compression filter to use when creating the HDF5 dataset
             (e.g., "gzip", "lzf"). If None, no compression is applied.
@@ -127,7 +132,8 @@ def create_dataset(
         name=dataset_key,
         shape=(num_samples, *sample_shape),
         dtype=sample_dtype,
-        maxshape=(None, *sample_shape),  # allow resiting along axis 0
+        chunks=(h5_chunk_length, *sample_shape) if h5_chunk_length is not None else None,
+        maxshape=(None, *sample_shape),  # allow resizing along axis 0
         compression=h5_compression,
         compression_opts=h5_compression_opts,
     )
