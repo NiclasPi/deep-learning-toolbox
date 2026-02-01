@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from typing import Literal, Protocol, Type, TypeGuard, TypeVar, runtime_checkable
 
 from attrs import field, frozen
+from cattrs.gen import make_dict_structure_fn
 from cattrs.preconf.json import make_converter
 
 T = TypeVar("T")
-_CONVERTER = make_converter()
 
 
 @runtime_checkable
@@ -47,11 +47,25 @@ class DatasetMetadata[T]:
     @staticmethod
     def from_json_bytes(json_bytes: bytes, sample_meta_type: Type[T]) -> DatasetMetadata[T]:
         """Parse DatasetMetadata from JSON bytes."""
-        return _CONVERTER.loads(json_bytes, DatasetMetadata[sample_meta_type])
+
+        converter = make_converter()
+
+        # def sample_meta_structure_hook(val, tp):
+        #     return converter.structure(val, dict[str, sample_meta_type])
+
+        hook = make_dict_structure_fn(
+            DatasetMetadata[sample_meta_type],
+            converter,
+            # sample_meta=override(struct_hook=sample_meta_structure_hook)
+        )
+        converter.register_structure_hook(DatasetMetadata, hook)
+        return converter.loads(json_bytes, DatasetMetadata[sample_meta_type])
 
     def to_json_bytes(self) -> bytes:
         """Return JSON representation as bytes."""
-        return _CONVERTER.dumps(_CONVERTER.unstructure(self)).encode("utf-8")
+
+        converter = make_converter()
+        return converter.dumps(converter.unstructure(self)).encode("utf-8")
 
     @property
     def filename(self) -> str:

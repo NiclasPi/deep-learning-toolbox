@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 
 import pytest
@@ -74,3 +75,22 @@ def test_resolvable_sample_meta() -> None:
     sample_meta = meta.get_sample_meta_by_id("01")
     assert sample_meta.id == "01"
     assert sample_meta.split == "train"
+
+
+def test_unseen_sample_meta() -> None:
+    @frozen(kw_only=True)
+    class UnseenSampleMetadata:
+        name: str
+
+    meta_serialized = json.dumps(
+        {
+            "name": "Test Dataset",
+            "split": "train",
+            "origin_path": "/path/to/dataset/origin/",
+            "sample_ids": ["01"],
+            "sample_meta": {"01": {"name": "Item 01"}},
+        }
+    ).encode("utf-8")
+    meta_structured = DatasetMetadata.from_json_bytes(meta_serialized, UnseenSampleMetadata)
+    assert isinstance(meta_structured, DatasetMetadata)
+    assert isinstance(meta_structured.sample_meta["01"], UnseenSampleMetadata)

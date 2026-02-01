@@ -254,7 +254,7 @@ class H5Dataset[T](Dataset):
             raise ValueError(f'unknown mode "{mode}"')
 
         if not ignore_user_block:
-            self._metadata = DatasetMetadata.from_json_bytes(self.ub_bytes, sample_meta_type)
+            self._metadata = DatasetMetadata.from_json_bytes(self.ub_bytes.rstrip(b"\x00"), sample_meta_type)
         else:
             self._metadata = None
 
