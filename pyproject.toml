@@ -49,6 +49,10 @@ cpu = [
     "torch>=2.1.2",
     "torchvision",
 ]
+cu128 = [
+    "torch>=2.1.2",
+    "torchvision",
+]
 cu130 = [
     "torch>=2.1.2",
     "torchvision",
@@ -70,6 +74,7 @@ required-environments = [
 conflicts = [
   [
     { extra = "cpu" },
+    { extra = "cu128" },
     { extra = "cu130" },
   ],
 ]
@@ -77,16 +82,23 @@ conflicts = [
 [tool.uv.sources]
 torch = [
     { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128", marker = "sys_platform != 'darwin'" },
     { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform != 'darwin'" },
 ]
 torchvision = [
     { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128", marker = "sys_platform != 'darwin'" },
     { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform != 'darwin'" },
 ]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [[tool.uv.index]]
