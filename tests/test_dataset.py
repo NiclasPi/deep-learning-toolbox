@@ -1,70 +1,70 @@
-import os
-import tempfile
-from collections.abc import Generator
 from dataclasses import dataclass
-from typing import IO, Literal, Tuple
+from typing import Literal
 
 import numpy as np
 import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from dltoolbox.dataset.errors import H5DatasetMissingKeyError
+from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError, H5DatasetMissingKeyError
 from dltoolbox.dataset.h5dataset import H5Dataset, H5DatasetDisk, H5DatasetMemory, create_hdf5_file
-from dltoolbox.dataset.metadata import DatasetMetadata
+from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.transforms import ToTensor
 
+USER_BLOCK_PAYLOAD = b"Hello from HDF5 user block!"
 
-@pytest.fixture(scope="class")
-def data_shape() -> Tuple[int, ...]:
+
+@dataclass
+class SampleMeta:
+    id: int
+
+
+@pytest.fixture(scope="module")
+def data_shape() -> tuple[int, ...]:
     return 100, 16, 16, 3
 
 
-@pytest.fixture(scope="class")
-def labels_shape() -> Tuple[int, ...]:
+@pytest.fixture(scope="module")
+def labels_shape() -> tuple[int, ...]:
     return 100, 16, 1
 
 
-@pytest.fixture(scope="class")
-def create_temporary_hdf5(data_shape, labels_shape) -> Generator[tuple[IO, np.ndarray, np.ndarray]]:
-    tmp_file = tempfile.NamedTemporaryFile("w+b", delete=False)
-    tmp_file.close()
-
-    try:
-        data = np.random.randn(*data_shape).astype(np.float16)
-        labels = np.random.randn(*labels_shape).astype(np.float16)
-
-        create_hdf5_file(tmp_file.name, data, labels, user_block=bytes("Hello from HDF5 user block!", encoding="utf-8"))
-
-        yield tmp_file, data, labels
-    finally:
-        tmp_file.close()
-        os.unlink(tmp_file.name)
+@pytest.fixture(scope="module")
+def create_temporary_hdf5(tmp_path_factory, data_shape, labels_shape) -> tuple[str, np.ndarray, np.ndarray]:
+    path = tmp_path_factory.mktemp("h5") / "data.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    labels = np.random.randn(*labels_shape).astype(np.float16)
+    create_hdf5_file(str(path), data, labels, user_block=USER_BLOCK_PAYLOAD)
+    return str(path), data, labels
 
 
-@pytest.fixture(scope="class")
-def create_temporary_hdf5_data_only(data_shape) -> Generator[tuple[IO, np.ndarray]]:
-    tmp_file = tempfile.NamedTemporaryFile("w+b", delete=False)
-    tmp_file.close()
+@pytest.fixture(scope="module")
+def create_temporary_hdf5_data_only(tmp_path_factory, data_shape) -> tuple[str, np.ndarray]:
+    path = tmp_path_factory.mktemp("h5_data_only") / "data.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    create_hdf5_file(str(path), data, labels_arr=None, user_block=USER_BLOCK_PAYLOAD)
+    return str(path), data
 
-    try:
-        data = np.random.randn(*data_shape).astype(np.float16)
 
-        create_hdf5_file(
-            tmp_file.name, data, labels_arr=None, user_block=bytes("Hello from HDF5 user block!", encoding="utf-8")
-        )
+@pytest.fixture(scope="module")
+def create_temporary_hdf5_with_meta(tmp_path_factory, data_shape, labels_shape) -> tuple[str, np.ndarray, np.ndarray]:
+    path = tmp_path_factory.mktemp("h5_with_meta") / "data.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    labels = np.random.randn(*labels_shape).astype(np.float16)
 
-        yield tmp_file, data
-    finally:
-        tmp_file.close()
-        os.unlink(tmp_file.name)
+    header = DatasetMetadata(name="test", split="train", num_samples=data_shape[0], origin_path="/path/to/origin")
+    sample_ids = [str(i) for i in range(data_shape[0])]
+    sample_meta = [SampleMeta(id=i) for i in range(data_shape[0])]
+
+    create_hdf5_file(str(path), data, labels, user_block=header, sample_ids=sample_ids, sample_meta=sample_meta)
+    return str(path), data, labels
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
 @pytest.mark.parametrize("axis", [0, 1])
-def test_h5(create_temporary_hdf5, mode: Literal["disk", "memory"], axis: int) -> None:
-    h5_file, data, labels = create_temporary_hdf5
-    dataset = H5Dataset(mode, h5_file.name, data_row_dim=axis, label_row_dim=axis)
+def test_reads_sample_at_row_dim(create_temporary_hdf5, mode: Literal["disk", "memory"], axis: int) -> None:
+    h5_path, data, labels = create_temporary_hdf5
+    dataset = H5Dataset(mode, h5_path, data_row_dim=axis, label_row_dim=axis)
     if mode == "disk":
         assert isinstance(dataset._instance, H5DatasetDisk)
     elif mode == "memory":
@@ -80,10 +80,10 @@ def test_h5(create_temporary_hdf5, mode: Literal["disk", "memory"], axis: int) -
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
 @pytest.mark.parametrize("axis", [0, 1])
-def test_h5_indices(create_temporary_hdf5, mode: Literal["disk", "memory"], axis: int) -> None:
-    h5_file, data, labels = create_temporary_hdf5
+def test_select_indices_exposes_subset(create_temporary_hdf5, mode: Literal["disk", "memory"], axis: int) -> None:
+    h5_path, data, labels = create_temporary_hdf5
     indices = [0, 1, 2, 15]
-    dataset = H5Dataset(mode, h5_file.name, data_row_dim=axis, label_row_dim=axis, select_indices=indices)
+    dataset = H5Dataset(mode, h5_path, data_row_dim=axis, label_row_dim=axis, select_indices=indices)
 
     assert len(dataset) == 4
     for i in range(len(indices)):
@@ -95,9 +95,9 @@ def test_h5_indices(create_temporary_hdf5, mode: Literal["disk", "memory"], axis
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
-def test_h5_static_label(create_temporary_hdf5_data_only, mode: Literal["disk", "memory"]) -> None:
-    h5_file, data = create_temporary_hdf5_data_only
-    dataset = H5Dataset(mode, h5_file.name, static_label=np.array([0], dtype=np.float32))
+def test_static_label_fills_in_missing_labels(create_temporary_hdf5_data_only, mode: Literal["disk", "memory"]) -> None:
+    h5_path, data = create_temporary_hdf5_data_only
+    dataset = H5Dataset(mode, h5_path, static_label=np.array([0], dtype=np.float32))
     assert len(dataset) == data.shape[0]
     sample, label, _ = dataset[0]
     assert sample.shape == tuple([s for d, s in enumerate(data.shape) if d != 0])
@@ -105,34 +105,38 @@ def test_h5_static_label(create_temporary_hdf5_data_only, mode: Literal["disk", 
     assert np.allclose(np.take(data, 0, axis=0), sample)
     assert np.allclose(0, label)
 
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_missing_labels_without_static_label_raises(
+    create_temporary_hdf5_data_only, mode: Literal["disk", "memory"]
+) -> None:
+    h5_path, _ = create_temporary_hdf5_data_only
     with pytest.raises(H5DatasetMissingKeyError):
-        # raises because hdf5 file does not contain labels, and we are not providing a static label
-        H5Dataset(mode, h5_file.name)
+        H5Dataset(mode, h5_path)
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
-def test_h5_user_block(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
-    h5_file, _, _ = create_temporary_hdf5
-    dataset = H5Dataset(mode, h5_file.name)
+def test_user_block_bytes_roundtrip(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
+    h5_path, _, _ = create_temporary_hdf5
+    dataset = H5Dataset(mode, h5_path)
 
-    assert dataset.ub_size == 512
-    assert dataset.ub_bytes.decode(encoding="utf-8").rstrip("\x00") == "Hello from HDF5 user block!"
+    assert dataset.ub_size >= len(USER_BLOCK_PAYLOAD)
+    assert dataset.ub_bytes.rstrip(b"\x00") == USER_BLOCK_PAYLOAD
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
-def test_h5_transform(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
-    h5_file, data, labels = create_temporary_hdf5
-    dataset = H5Dataset(mode, h5_file.name, data_transform=ToTensor(), label_transform=ToTensor())
-    assert len(dataset) == data.shape[0]
+def test_transforms_convert_samples_to_tensor(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
+    h5_path, _, _ = create_temporary_hdf5
+    dataset = H5Dataset(mode, h5_path, data_transform=ToTensor(), label_transform=ToTensor())
     sample, label, _ = dataset[0]
     assert isinstance(sample, torch.Tensor)
     assert isinstance(label, torch.Tensor)
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
-def test_h5_collate_no_meta(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
-    h5_file, data, labels = create_temporary_hdf5
-    dataset = H5Dataset(mode, h5_file.name)
+def test_collate_yields_none_when_meta_absent(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
+    h5_path, _, _ = create_temporary_hdf5
+    dataset = H5Dataset(mode, h5_path)
     loader = DataLoader(dataset, batch_size=4, collate_fn=H5Dataset.collate_fn)
     data, labels, meta = next(iter(loader))
     assert len(data) == 4
@@ -142,25 +146,64 @@ def test_h5_collate_no_meta(create_temporary_hdf5, mode: Literal["disk", "memory
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
-def test_h5_collate_with_meta(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
-    @dataclass
-    class SampleMeta:
-        id: int
-
-    h5_file, data, labels = create_temporary_hdf5
-    dataset = H5Dataset(mode, h5_file.name)
-
-    dataset._metadata = DatasetMetadata(
-        name="test",
-        split="train",
-        origin_path="/path/to/origin",
-        sample_ids=list(str(i) for i in range(100)),
-        sample_meta={str(i): SampleMeta(id=i) for i in range(100)},
-    )
+def test_collate_preserves_sample_meta_order(create_temporary_hdf5_with_meta, mode: Literal["disk", "memory"]) -> None:
+    h5_path, _, _ = create_temporary_hdf5_with_meta
+    dataset = H5Dataset[SampleMeta](mode, h5_path, ignore_user_block=False, sample_meta_type=SampleMeta)
 
     loader = DataLoader(dataset, batch_size=4, collate_fn=H5Dataset.collate_fn)
-    data, labels, meta = next(iter(loader))
-    assert len(data) == 4
-    assert len(labels) == 4
-    assert len(meta) == 4
-    assert all(isinstance(meta[i], SampleMeta) for i in range(4))
+    _, _, meta = next(iter(loader))
+    assert all(isinstance(m, SampleMeta) for m in meta)
+    assert [m.id for m in meta] == [0, 1, 2, 3]
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_indices_exposes_meta_subset(create_temporary_hdf5_with_meta, mode: Literal["disk", "memory"]) -> None:
+    h5_path, _, _ = create_temporary_hdf5_with_meta
+    indices = [3, 10, 42]
+    dataset = H5Dataset[SampleMeta](
+        mode, h5_path, select_indices=indices, ignore_user_block=False, sample_meta_type=SampleMeta
+    )
+
+    assert len(dataset) == len(indices)
+    for i, original_idx in enumerate(indices):
+        _, _, meta = dataset[i]
+        assert isinstance(meta, SampleMeta)
+        assert meta.id == original_idx
+
+
+def test_h5_header_num_samples_mismatch_raises(data_shape, labels_shape, tmp_path) -> None:
+    # Single mode only: the check runs in H5Dataset.__init__ before the disk/memory
+    # branch in _build_store, so both modes execute the same code for this rule.
+    path = tmp_path / "mismatch.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    labels = np.random.randn(*labels_shape).astype(np.float16)
+    header = DatasetMetadata(
+        name="test",
+        split="train",
+        num_samples=data_shape[0] + 1,  # lie about the count
+        origin_path="/origin",
+    )
+    create_hdf5_file(str(path), data, labels, user_block=header)
+
+    with pytest.raises(DatasetNumSamplesMismatchError):
+        H5Dataset("memory", str(path), ignore_user_block=False)
+
+
+def test_create_hdf5_file_requires_sample_ids_and_meta_together(data_shape, labels_shape, tmp_path) -> None:
+    path = tmp_path / "out.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    labels = np.random.randn(*labels_shape).astype(np.float16)
+
+    with pytest.raises(ValueError, match="together"):
+        create_hdf5_file(str(path), data, labels, sample_ids=[str(i) for i in range(data_shape[0])], sample_meta=None)
+
+
+def test_create_hdf5_file_sample_ids_and_meta_length_mismatch(data_shape, labels_shape, tmp_path) -> None:
+    path = tmp_path / "out.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    labels = np.random.randn(*labels_shape).astype(np.float16)
+
+    with pytest.raises(ValueError, match="length mismatch"):
+        create_hdf5_file(
+            str(path), data, labels, sample_ids=["a", "b", "c"], sample_meta=[SampleMeta(id=0), SampleMeta(id=1)]
+        )

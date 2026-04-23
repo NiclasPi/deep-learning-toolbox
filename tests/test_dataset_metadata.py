@@ -1,174 +1,63 @@
-import json
-from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Literal
 
 import pytest
-from attrs import evolve, frozen
 from cattrs.preconf.json import make_converter
 
-from dltoolbox.dataset.metadata import DatasetMetadata
+from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 
 
-@frozen(kw_only=True)
-class SampleMetadata:
-    name: str
-    size: int
-    confidence: float
+def _build(**overrides) -> DatasetMetadata:
+    defaults = dict(name="Test Dataset", split="train", num_samples=4, origin_path="/path/to/dataset/origin/")
+    defaults.update(overrides)
+    return DatasetMetadata(**defaults)
 
 
-@dataclass(kw_only=True)
-class SampleMetadataDataclass:
-    name: str
-    size: int
-    confidence: float
+def test_round_trip_minimal() -> None:
+    meta = _build()
+    restored = DatasetMetadata.from_json_bytes(meta.to_json_bytes())
+    assert meta == restored
 
 
-@pytest.mark.parametrize(
-    "sample_meta",
-    [
-        "str",
-        1,
-        2.3,
-        ["str", 1],
-        {"field": "value"},
-        SampleMetadata(name="test", size=42, confidence=0.96),
-        SampleMetadataDataclass(name="test", size=42, confidence=0.96),
-    ],
-    ids=["str", "int", "float", "list", "dict", "attrs", "dataclass"],
-)
-def test_metadata_serialization(sample_meta) -> None:
-    meta = DatasetMetadata(
-        name="Test Dataset",
-        split="train",
-        origin_path="/path/to/dataset/origin/",
-        sample_ids=["01", "02", "03", "04"],
-        sample_meta={"01": sample_meta},
+def test_round_trip_full_fields() -> None:
+    meta = _build(
+        version=2,
+        description="description text",
+        extra_data={"foo": 1, "bar": [1, 2, 3], "nested": {"a": True}},
+        created_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC),
+        git_hash="deadbeef",
+        comment="a comment",
     )
-
-    meta_serialized = meta.to_json_bytes()
-    meta_structured = DatasetMetadata.from_json_bytes(meta_serialized, type(sample_meta))
-    assert meta == meta_structured
+    restored = DatasetMetadata.from_json_bytes(meta.to_json_bytes())
+    assert meta == restored
 
 
-@frozen(kw_only=True)
-class ResolvableSampleMetadata:
-    id: str | None = None
-    name: str
-    size: int
-    confidence: float
-    split: str | None = None
-
-    def resolve(
-        self, sample_id: str, dataset_metadata: "DatasetMetadata[ResolvableSampleMetadata]"
-    ) -> "ResolvableSampleMetadata":
-        return evolve(self, id=sample_id, split=dataset_metadata.split)
+def test_equality_is_by_value() -> None:
+    # pin created_at so two independent constructions share every field
+    # (the default factory would otherwise return distinct datetime.now values)
+    fixed = datetime(2026, 1, 1, tzinfo=UTC)
+    assert _build(created_at=fixed) == _build(created_at=fixed)
+    assert _build(created_at=fixed) != _build(created_at=fixed, name="other")
 
 
-def test_resolvable_sample_meta() -> None:
-    meta: DatasetMetadata[ResolvableSampleMetadata] = DatasetMetadata(
-        name="Test Dataset",
-        split="train",
-        origin_path="/path/to/dataset/origin/",
-        sample_ids=["01"],
-        sample_meta={"01": ResolvableSampleMetadata(name="test", size=42, confidence=0.96)},
-    )
-
-    meta_serialized = meta.to_json_bytes()
-    meta_structured = DatasetMetadata.from_json_bytes(meta_serialized, ResolvableSampleMetadata)
-    assert meta == meta_structured
-
-    sample_meta = meta.get_sample_meta_by_id("01")
-    assert sample_meta.id == "01"
-    assert sample_meta.split == "train"
-
-
-def test_from_json_bytes_structures_unregistered_sample_meta_type() -> None:
-    """Deserialization must work for a sample_meta type the converter has never seen.
-
-    Guards the reliance on cattrs' native generic dispatch: no hook is pre-registered for
-    ``UnseenSampleMetadata`` (it's defined locally here), yet ``from_json_bytes`` is
-    expected to structure the nested dict into instances of it.
-    """
-
-    @frozen(kw_only=True)
-    class UnseenSampleMetadata:
-        name: str
-
-    meta_serialized = json.dumps(
-        {
-            "name": "Test Dataset",
-            "split": "train",
-            "origin_path": "/path/to/dataset/origin/",
-            "sample_ids": ["01"],
-            "sample_meta": {"01": {"name": "Item 01"}},
-        }
-    ).encode("utf-8")
-    meta_structured = DatasetMetadata.from_json_bytes(meta_serialized, UnseenSampleMetadata)
-    assert isinstance(meta_structured, DatasetMetadata)
-    assert isinstance(meta_structured.sample_meta["01"], UnseenSampleMetadata)
-
-
-def test_custom_converter_is_used() -> None:
+@pytest.mark.parametrize("direction", ["to", "from"])
+def test_custom_converter_is_used(direction: Literal["to", "from"]) -> None:
     converter = make_converter()
     converter.register_unstructure_hook(str, lambda s: f"<<{s}>>")
+    converter.register_structure_hook(str, lambda v, _: f"!{v}!")
 
-    meta = DatasetMetadata[str](
-        name="custom",
-        split="train",
-        origin_path="/",
-        sample_ids=["01"],
-        sample_meta={"01": "meta"},
-    )
-    serialized = meta.to_json_bytes(converter=converter)
-    assert b"<<custom>>" in serialized
-    assert b"<<meta>>" in serialized
+    meta = _build(name="custom")
 
-
-def test_sample_meta_keys_must_be_subset_of_sample_ids() -> None:
-    with pytest.raises(ValueError, match="sample_meta contains"):
-        DatasetMetadata(
-            name="Test Dataset",
-            split="train",
-            origin_path="/path/",
-            sample_ids=["01", "02"],
-            sample_meta={"03": "orphan"},
-        )
-
-
-def test_get_sample_meta_by_id_returns_none_for_missing() -> None:
-    meta = DatasetMetadata[str](
-        name="Test Dataset",
-        split="train",
-        origin_path="/path/",
-        sample_ids=["01", "02"],
-        sample_meta={"01": "meta-a"},
-    )
-    assert meta.get_sample_meta_by_id("unknown") is None
-    assert meta.get_sample_meta_by_id("02") is None
-    assert meta.get_sample_meta_by_id("01") == "meta-a"
-
-
-def test_get_sample_meta_by_index() -> None:
-    meta = DatasetMetadata[str](
-        name="Test Dataset",
-        split="train",
-        origin_path="/path/",
-        sample_ids=["01", "02"],
-        sample_meta={"01": "meta-a"},
-    )
-    assert meta.get_sample_meta_by_index(0) == "meta-a"
-    assert meta.get_sample_meta_by_index(1) is None
-    with pytest.raises(IndexError):
-        meta.get_sample_meta_by_index(5)
-
-
-def test_num_samples() -> None:
-    meta = DatasetMetadata[str](
-        name="Test Dataset",
-        split="train",
-        origin_path="/path/",
-        sample_ids=["01", "02", "03"],
-    )
-    assert meta.num_samples == 3
+    if direction == "to":
+        assert b"<<custom>>" in meta.to_json_bytes(converter=converter)
+        # negative half: default converter must not apply the hook
+        assert b"<<custom>>" not in meta.to_json_bytes()
+    else:
+        # use default-unstructured bytes so the marker can only come from the
+        # custom structure hook firing via the converter= parameter
+        default_bytes = meta.to_json_bytes()
+        restored = DatasetMetadata.from_json_bytes(default_bytes, converter=converter)
+        assert restored.name == "!custom!"
 
 
 @pytest.mark.parametrize(
@@ -182,10 +71,5 @@ def test_num_samples() -> None:
     ids=["plain", "spaces", "slashes", "unicode"],
 )
 def test_filename(name: str, split: str, expected: str) -> None:
-    meta = DatasetMetadata[str](
-        name=name,
-        split=split,  # type: ignore[arg-type]
-        origin_path="/",
-        sample_ids=[],
-    )
+    meta = _build(name=name, split=split)
     assert meta.filename == expected
