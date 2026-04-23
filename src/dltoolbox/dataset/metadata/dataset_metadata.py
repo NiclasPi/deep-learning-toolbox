@@ -1,55 +1,65 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from typing import Literal, TypeVar
-
-from attrs import field, frozen
-from cattrs import Converter
-from cattrs.preconf.json import make_converter
-
-T = TypeVar("T")
-
-_default_converter = make_converter()
+from typing import Literal
 
 
-@frozen(kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class DatasetMetadata:
+    """Slim, JSON-serializable header describing a dataset file.
+
+    Intended to live in the HDF5 userblock as a small, fast-to-read summary of the file
+    (identity, split, size, provenance) — not per-sample metadata, which is stored separately
+    as HDF5 datasets and accessed via a `SampleMetaStore`.
+
+    Immutable by design: once a dataset is built, its header should not change. Serialization
+    uses stdlib `json`, so all fields (including anything placed in `extra_data`) must be
+    JSON-native; `created_at` is handled specially via ISO-8601.
+    """
+
+    # schema version of this header; bump when the on-disk layout changes in an incompatible way
     version: int = 1
 
+    # human-readable dataset name
     name: str
+    # which ML split this file represents
     split: Literal["train", "valid", "test"]
+    # free-form long description
     description: str = ""
 
-    # the number of samples this dataset holds
+    # total number of samples stored in the file (pre-selection); cross-checked against the data dataset at load
     num_samples: int
 
-    # a unique identifier of the origin (e.g. a filesystem path to the files' directory)
+    # stable identifier of where the raw inputs came from (e.g. source directory); not a path to this .h5
     origin_path: str
 
-    # additional data fields
-    extra_data: dict = field(factory=dict)
+    # escape hatch for project-specific fields that don't warrant a schema change; must be JSON-serializable
+    extra_data: dict = field(default_factory=dict)
 
-    created_at: datetime = field(factory=lambda: datetime.now(UTC))
+    # UTC timestamp of when this metadata object was constructed (i.e. dataset build time)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # commit hash of the code that produced the dataset, for reproducibility
     git_hash: str | None = None
 
+    # freeform human note
     comment: str | None = None
 
     @classmethod
-    def from_json_bytes(cls, json_bytes: bytes, converter: Converter | None = None) -> DatasetMetadata:
+    def from_json_bytes(cls, json_bytes: bytes) -> DatasetMetadata:
         """Parse DatasetMetadata from JSON bytes."""
+        data = json.loads(json_bytes)
+        data["created_at"] = datetime.fromisoformat(data["created_at"])
+        return cls(**data)
 
-        if converter is None:
-            converter = _default_converter
-        return converter.loads(json_bytes, cls)
-
-    def to_json_bytes(self, converter: Converter | None = None) -> bytes:
+    def to_json_bytes(self) -> bytes:
         """Return JSON representation as bytes."""
-
-        if converter is None:
-            converter = _default_converter
-        return converter.dumps(converter.unstructure(self)).encode("utf-8")
+        d = asdict(self)
+        d["created_at"] = self.created_at.isoformat()
+        return json.dumps(d).encode("utf-8")
 
     @property
     def filename(self) -> str:

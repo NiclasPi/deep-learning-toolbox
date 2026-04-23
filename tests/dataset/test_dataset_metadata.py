@@ -1,8 +1,6 @@
 from datetime import UTC, datetime
-from typing import Literal
 
 import pytest
-from cattrs.preconf.json import make_converter
 
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 
@@ -38,26 +36,6 @@ def test_equality_is_by_value() -> None:
     fixed = datetime(2026, 1, 1, tzinfo=UTC)
     assert _build(created_at=fixed) == _build(created_at=fixed)
     assert _build(created_at=fixed) != _build(created_at=fixed, name="other")
-
-
-@pytest.mark.parametrize("direction", ["to", "from"])
-def test_custom_converter_is_used(direction: Literal["to", "from"]) -> None:
-    converter = make_converter()
-    converter.register_unstructure_hook(str, lambda s: f"<<{s}>>")
-    converter.register_structure_hook(str, lambda v, _: f"!{v}!")
-
-    meta = _build(name="custom")
-
-    if direction == "to":
-        assert b"<<custom>>" in meta.to_json_bytes(converter=converter)
-        # negative half: default converter must not apply the hook
-        assert b"<<custom>>" not in meta.to_json_bytes()
-    else:
-        # use default-unstructured bytes so the marker can only come from the
-        # custom structure hook firing via the converter= parameter
-        default_bytes = meta.to_json_bytes()
-        restored = DatasetMetadata.from_json_bytes(default_bytes, converter=converter)
-        assert restored.name == "!custom!"
 
 
 @pytest.mark.parametrize(

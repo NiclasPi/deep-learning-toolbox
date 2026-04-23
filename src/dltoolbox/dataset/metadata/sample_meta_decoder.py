@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from cattrs import Converter
+from cattrs.preconf.json import make_converter
 
-from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata, _default_converter
+from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.metadata.resolvable_sample_meta import is_resolvable
+
+_default_converter = make_converter()
 
 
 class SampleMetaDecoder[T]:

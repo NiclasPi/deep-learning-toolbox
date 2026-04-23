@@ -10,11 +10,11 @@ from torch.utils.data import Dataset, default_collate
 from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError
 from dltoolbox.dataset.h5_dataset_disk import H5DatasetDisk
 from dltoolbox.dataset.h5_dataset_memory import H5DatasetMemory
-from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata, _default_converter
+from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.metadata.eager_sample_meta_store import EagerSampleMetaStore
 from dltoolbox.dataset.metadata.isample_meta_store import ISampleMetaStore
 from dltoolbox.dataset.metadata.lazy_sample_meta_store import LazySampleMetaStore
-from dltoolbox.dataset.metadata.sample_meta_decoder import SampleMetaDecoder
+from dltoolbox.dataset.metadata.sample_meta_decoder import SampleMetaDecoder, _default_converter
 from dltoolbox.transforms import Transformer
 
 
