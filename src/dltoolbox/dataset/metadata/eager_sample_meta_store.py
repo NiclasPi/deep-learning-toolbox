@@ -7,7 +7,7 @@ import h5py
 from dltoolbox.dataset.errors import SampleMetaLengthMismatchError
 from dltoolbox.dataset.metadata._utils import read_ids
 from dltoolbox.dataset.metadata.isample_meta_store import ISampleMetaStore
-from dltoolbox.dataset.metadata.sample_meta_decoder import SampleMetaDecoder
+from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaDecoder
 
 
 class EagerSampleMetaStore[T](ISampleMetaStore[T]):
@@ -39,7 +39,7 @@ class EagerSampleMetaStore[T](ISampleMetaStore[T]):
             view_ids = [all_ids[i] for i in select_indices]
             view_raw = [all_raw[i] for i in select_indices]
 
-        self._items: list[T] = [decoder.decode(raw, sid) for sid, raw in zip(view_ids, view_raw, strict=True)]
+        self._items: list[T] = [decoder(raw, sid) for sid, raw in zip(view_ids, view_raw, strict=True)]
         self._id_to_index: dict[str, int] = {sid: i for i, sid in enumerate(view_ids)}
 
     def __len__(self) -> int:

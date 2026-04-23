@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
-from dltoolbox.dataset.metadata.resolvable_sample_meta import is_resolvable
+from dltoolbox.dataset.metadata.sample_meta_protocols import is_resolvable
 
 
 @dataclass

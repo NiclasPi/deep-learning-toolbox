@@ -20,28 +20,6 @@ conflicts = [[
 ]]
 
 [[package]]
-name = "attrs"
-version = "26.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
-]
-
-[[package]]
-name = "cattrs"
-version = "26.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "attrs", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
-    { name = "typing-extensions", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a0/ec/ba18945e7d6e55a58364d9fb2e46049c1c2998b3d805f19b703f14e81057/cattrs-26.1.0.tar.gz", hash = "sha256:fa239e0f0ec0715ba34852ce813986dfed1e12117e209b816ab87401271cdd40", size = 495672, upload-time = "2026-02-18T22:15:19.406Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/56/60547f7801b97c67e97491dc3d9ade9fbccbd0325058fd3dfcb2f5d98d90/cattrs-26.1.0-py3-none-any.whl", hash = "sha256:d1e0804c42639494d469d08d4f26d6b9de9b8ab26b446db7b5f8c2e97f7c3096", size = 73054, upload-time = "2026-02-18T22:15:17.958Z" },
-]
-
-[[package]]
 name = "cffi"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -204,8 +182,6 @@ name = "dltoolbox"
 version = "0.0.2"
 source = { editable = "." }
 dependencies = [
-    { name = "attrs", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
-    { name = "cattrs", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
     { name = "h5py", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
     { name = "numpy", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
     { name = "opencv-python-headless", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
@@ -256,8 +232,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "attrs", specifier = ">=25.4.0" },
-    { name = "cattrs", specifier = ">=25.3.0" },
     { name = "h5py" },
     { name = "numpy" },
     { name = "opencv-python-headless" },
@@ -899,7 +873,7 @@ dependencies = [
     { name = "typing-extensions", marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (extra != 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.2.2-cp312-none-macosx_10_9_x86_64.whl", hash = "sha256:49508cb377ac965185a5c94e18a7719ad386a35e6f0a5f999f542f6e80f3c5ec" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.2.2-cp312-none-macosx_10_9_x86_64.whl", hash = "sha256:49508cb377ac965185a5c94e18a7719ad386a35e6f0a5f999f542f6e80f3c5ec", upload-time = "2024-03-28T15:20:54Z" },
 ]
 
 [[package]]
@@ -970,11 +944,11 @@ dependencies = [
     { name = "typing-extensions", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (extra != 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp314-cp314t-manylinux_2_28_x86_64.whl" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T14:59:03Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T14:59:05Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T14:59:07Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T14:59:11Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp314-cp314t-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T14:59:13Z" },
 ]
 
 [[package]]
@@ -1001,11 +975,11 @@ dependencies = [
     { name = "typing-extensions", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp313-cp313t-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp314-cp314-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp314-cp314t-manylinux_2_28_x86_64.whl" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:01:33Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:01:50Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp313-cp313t-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:02:08Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp314-cp314-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:02:27Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp314-cp314t-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:02:46Z" },
 ]
 
 [[package]]
@@ -1032,11 +1006,11 @@ dependencies = [
     { name = "typing-extensions", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu130') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp313-cp313-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp313-cp313t-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp314-cp314-manylinux_2_28_x86_64.whl" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp314-cp314t-manylinux_2_28_x86_64.whl" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:04:35Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp313-cp313-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:04:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp313-cp313t-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:05:05Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp314-cp314-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:05:17Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp314-cp314t-manylinux_2_28_x86_64.whl", upload-time = "2026-03-23T15:05:28Z" },
 ]
 
 [[package]]
@@ -1083,7 +1057,7 @@ dependencies = [
     { name = "torch", version = "2.2.2", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'extra-9-dltoolbox-cpu') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'darwin' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'darwin' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (extra != 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.17.2-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:14fd1d4a033c325bdba2d03a69c3450cab6d3a625f85cc375781d9237ca5d04d" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.17.2-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:14fd1d4a033c325bdba2d03a69c3450cab6d3a625f85cc375781d9237ca5d04d", upload-time = "2024-03-28T15:22:03Z" },
 ]
 
 [[package]]
@@ -1136,11 +1110,11 @@ dependencies = [
     { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cpu') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (extra != 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130')" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:cf547dc0975eb40bc3249be4ccbeb736597d2c3ece305b1c4e5b7a5dd7363567" },
-    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:16c4f11eda096dc377e82238c8ebb26c7013622c0f1b2c4dcf85fc70f96c0ea7" },
-    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:870a97101168d4da68039d3d51f0c781047065e82dc4c19b2eb0ddff08486180" },
-    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:78e88d0a57bfadcd17042aa92fe4dd1059e48fcaa2e54a10ac7f438c2eca10d5" },
-    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:99f86ec0a83b9e4b5428a452bf667f99a9ae27d4c32bd4b2081fe917303e7710" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:cf547dc0975eb40bc3249be4ccbeb736597d2c3ece305b1c4e5b7a5dd7363567", upload-time = "2026-03-23T15:36:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:16c4f11eda096dc377e82238c8ebb26c7013622c0f1b2c4dcf85fc70f96c0ea7", upload-time = "2026-03-23T15:36:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:870a97101168d4da68039d3d51f0c781047065e82dc4c19b2eb0ddff08486180", upload-time = "2026-03-23T15:36:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:78e88d0a57bfadcd17042aa92fe4dd1059e48fcaa2e54a10ac7f438c2eca10d5", upload-time = "2026-03-23T15:36:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.26.0%2Bcpu-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:99f86ec0a83b9e4b5428a452bf667f99a9ae27d4c32bd4b2081fe917303e7710", upload-time = "2026-03-23T15:36:09Z" },
 ]
 
 [[package]]
@@ -1156,11 +1130,11 @@ dependencies = [
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu128') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:ccf26b4b659cfce6f2208cb8326071d51c70219a34856dfdf468d1e19af52c0d" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:cb1f6184a7ba30fba40580e1a01a6604a86c55e79fdda187f40116ee680441ec" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:6168abc019803ac9e97efce27eafd2fdb33db04dcc54a86039537729e5047b29" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:aac647c9130f1f25f5c8f5bca3d95cfd96bdfac93ab54529690b088e64e4fa64" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:b5772c55bfda4377df8f1930d43c4e0231ef231b0228eade4b227c8d3ba6e34e" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:ccf26b4b659cfce6f2208cb8326071d51c70219a34856dfdf468d1e19af52c0d", upload-time = "2026-03-23T15:36:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:cb1f6184a7ba30fba40580e1a01a6604a86c55e79fdda187f40116ee680441ec", upload-time = "2026-03-23T15:36:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:6168abc019803ac9e97efce27eafd2fdb33db04dcc54a86039537729e5047b29", upload-time = "2026-03-23T15:36:23Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:aac647c9130f1f25f5c8f5bca3d95cfd96bdfac93ab54529690b088e64e4fa64", upload-time = "2026-03-23T15:36:23Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:b5772c55bfda4377df8f1930d43c4e0231ef231b0228eade4b227c8d3ba6e34e", upload-time = "2026-03-23T15:36:23Z" },
 ]
 
 [[package]]
@@ -1176,11 +1150,11 @@ dependencies = [
     { name = "torch", version = "2.11.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-9-dltoolbox-cu130') or (platform_machine != 'x86_64' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (sys_platform != 'linux' and extra == 'extra-9-dltoolbox-cu128' and extra == 'extra-9-dltoolbox-cu130') or (extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu128') or (extra == 'extra-9-dltoolbox-cpu' and extra == 'extra-9-dltoolbox-cu130')" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:0f030a9bd8ada1a31b7111ea1589c1ecb5fa0884fee700a203e731b4cf378a98" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:441a98bed4fff1d54b8450499e377e1a605bec31f2ecb1a38a340f95dcc83897" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:110659ff38cd1d2ca0ac6e6a0f2c842fcb5fe739dfe65ff7456a12b2c4dce775" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:8d6a83a639d14f7e84f6b838a17e26f9ce41cdbe3dfe0c29ef74b32eb398ba28" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:aacac4d990ac794f3abeca66cc26affb42fbeba9789e5c351183665bab4902d2" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:0f030a9bd8ada1a31b7111ea1589c1ecb5fa0884fee700a203e731b4cf378a98", upload-time = "2026-03-23T15:36:26Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:441a98bed4fff1d54b8450499e377e1a605bec31f2ecb1a38a340f95dcc83897", upload-time = "2026-03-23T15:36:26Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:110659ff38cd1d2ca0ac6e6a0f2c842fcb5fe739dfe65ff7456a12b2c4dce775", upload-time = "2026-03-23T15:36:26Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:8d6a83a639d14f7e84f6b838a17e26f9ce41cdbe3dfe0c29ef74b32eb398ba28", upload-time = "2026-03-23T15:36:26Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.26.0%2Bcu130-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:aacac4d990ac794f3abeca66cc26affb42fbeba9789e5c351183665bab4902d2", upload-time = "2026-03-23T15:36:26Z" },
 ]
 
 [[package]]

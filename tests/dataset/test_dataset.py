@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from typing import Literal
 
 import numpy as np
@@ -8,8 +9,8 @@ from torch.utils.data import DataLoader
 
 from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError, H5DatasetMissingKeyError
 from dltoolbox.dataset.h5_dataset import H5Dataset, create_hdf5_file
-from dltoolbox.dataset.h5_dataset_memory import H5DatasetMemory
 from dltoolbox.dataset.h5_dataset_disk import H5DatasetDisk
+from dltoolbox.dataset.h5_dataset_memory import H5DatasetMemory
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.transforms import ToTensor
 
@@ -19,6 +20,14 @@ USER_BLOCK_PAYLOAD = b"Hello from HDF5 user block!"
 @dataclass
 class SampleMeta:
     id: int
+
+
+def _encode_sample_meta(obj: SampleMeta) -> bytes:
+    return json.dumps(asdict(obj)).encode("utf-8")
+
+
+def _decode_sample_meta(raw: bytes, sample_id: str) -> SampleMeta:
+    return SampleMeta(**json.loads(raw))
 
 
 @pytest.fixture(scope="module")
@@ -58,7 +67,15 @@ def create_temporary_hdf5_with_meta(tmp_path_factory, data_shape, labels_shape) 
     sample_ids = [str(i) for i in range(data_shape[0])]
     sample_meta = [SampleMeta(id=i) for i in range(data_shape[0])]
 
-    create_hdf5_file(str(path), data, labels, user_block=header, sample_ids=sample_ids, sample_meta=sample_meta)
+    create_hdf5_file(
+        str(path),
+        data,
+        labels,
+        user_block=header,
+        sample_ids=sample_ids,
+        sample_meta=sample_meta,
+        sample_meta_encoder=_encode_sample_meta,
+    )
     return str(path), data, labels
 
 
@@ -150,7 +167,7 @@ def test_collate_yields_none_when_meta_absent(create_temporary_hdf5, mode: Liter
 @pytest.mark.parametrize("mode", ["disk", "memory"])
 def test_collate_preserves_sample_meta_order(create_temporary_hdf5_with_meta, mode: Literal["disk", "memory"]) -> None:
     h5_path, _, _ = create_temporary_hdf5_with_meta
-    dataset = H5Dataset[SampleMeta](mode, h5_path, ignore_user_block=False, sample_meta_type=SampleMeta)
+    dataset = H5Dataset[SampleMeta](mode, h5_path, ignore_user_block=False, sample_meta_decoder=_decode_sample_meta)
 
     loader = DataLoader(dataset, batch_size=4, collate_fn=H5Dataset.collate_fn)
     _, _, meta = next(iter(loader))
@@ -163,7 +180,7 @@ def test_select_indices_exposes_meta_subset(create_temporary_hdf5_with_meta, mod
     h5_path, _, _ = create_temporary_hdf5_with_meta
     indices = [3, 10, 42]
     dataset = H5Dataset[SampleMeta](
-        mode, h5_path, select_indices=indices, ignore_user_block=False, sample_meta_type=SampleMeta
+        mode, h5_path, select_indices=indices, ignore_user_block=False, sample_meta_decoder=_decode_sample_meta
     )
 
     assert len(dataset) == len(indices)
@@ -207,5 +224,10 @@ def test_create_hdf5_file_sample_ids_and_meta_length_mismatch(data_shape, labels
 
     with pytest.raises(ValueError, match="length mismatch"):
         create_hdf5_file(
-            str(path), data, labels, sample_ids=["a", "b", "c"], sample_meta=[SampleMeta(id=0), SampleMeta(id=1)]
+            str(path),
+            data,
+            labels,
+            sample_ids=["a", "b", "c"],
+            sample_meta=[SampleMeta(id=0), SampleMeta(id=1)],
+            sample_meta_encoder=_encode_sample_meta,
         )

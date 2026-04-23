@@ -1,9 +1,9 @@
+import json
 from collections.abc import Sequence
 from typing import Any, Literal, Optional, Union
 
 import h5py
 import numpy as np
-from cattrs import Converter
 from torch import Tensor
 from torch.utils.data import Dataset, default_collate
 
@@ -14,7 +14,7 @@ from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.metadata.eager_sample_meta_store import EagerSampleMetaStore
 from dltoolbox.dataset.metadata.isample_meta_store import ISampleMetaStore
 from dltoolbox.dataset.metadata.lazy_sample_meta_store import LazySampleMetaStore
-from dltoolbox.dataset.metadata.sample_meta_decoder import SampleMetaDecoder, _default_converter
+from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaDecoder, SampleMetaEncoder, with_resolve
 from dltoolbox.transforms import Transformer
 
 
@@ -38,7 +38,7 @@ class H5Dataset[T](Dataset):
         data_transform: Optional[Transformer] = None,
         label_transform: Optional[Transformer] = None,
         ignore_user_block: bool = True,
-        sample_meta_type: type[T] | None = None,
+        sample_meta_decoder: SampleMetaDecoder[T] | None = None,
     ) -> None:
         if mode == "disk":
             self._instance = H5DatasetDisk(
@@ -82,7 +82,7 @@ class H5Dataset[T](Dataset):
             if self._header.num_samples != actual_num_samples:
                 raise DatasetNumSamplesMismatchError(self._header.num_samples, actual_num_samples)
 
-            if sample_meta_type is not None:
+            if sample_meta_decoder is not None:
                 self._store = self._build_store(
                     h5_path=h5_path,
                     mode=mode,
@@ -90,7 +90,7 @@ class H5Dataset[T](Dataset):
                     h5_sample_ids_key=h5_sample_ids_key,
                     h5_sample_meta_key=h5_sample_meta_key,
                     select_indices=select_indices,
-                    sample_meta_type=sample_meta_type,
+                    sample_meta_decoder=sample_meta_decoder,
                 )
 
     def _build_store(
@@ -102,9 +102,11 @@ class H5Dataset[T](Dataset):
         h5_sample_ids_key: str,
         h5_sample_meta_key: str,
         select_indices: Sequence[int] | None,
-        sample_meta_type: type[T],  # TODO: remove soon
+        sample_meta_decoder: SampleMetaDecoder[T],
     ) -> ISampleMetaStore[T]:
-        decoder = SampleMetaDecoder(sample_meta_type=sample_meta_type, header=header)
+        # bind the header once so objects implementing ResolvableSampleMeta are resolved
+        # automatically; non-resolvable payloads pass through unchanged
+        decoder = with_resolve(sample_meta_decoder, header)
         if mode == "disk":
             # share the already-open file handle from the disk instance
             f = self._instance.h5_file
@@ -165,6 +167,10 @@ class H5Dataset[T](Dataset):
         return batched_data, batched_labels, batched_meta
 
 
+def _default_json_encoder(obj: Any) -> bytes:
+    return json.dumps(obj).encode("utf-8")
+
+
 def create_hdf5_file(
     output_path: str,
     data_arr: np.ndarray,
@@ -177,7 +183,7 @@ def create_hdf5_file(
     user_block: DatasetMetadata | bytes | None = None,
     sample_ids: Sequence[str] | None = None,
     sample_meta: Sequence[Any] | None = None,
-    sample_meta_converter: Converter | None = None,
+    sample_meta_encoder: SampleMetaEncoder[Any] | None = None,
     metadata_compression: str | None = "gzip",
 ) -> None:
     if (sample_ids is None) != (sample_meta is None):
@@ -200,13 +206,15 @@ def create_hdf5_file(
             h5_file.create_dataset(labels_key, data=labels_arr)
 
         if sample_ids is not None:
-            converter = sample_meta_converter if sample_meta_converter is not None else _default_converter
+            # default encoder handles JSON-native payloads (dict, list, primitives); callers
+            # with typed payloads (e.g. dataclasses) supply their own SampleMetaEncoder
+            encoder = sample_meta_encoder if sample_meta_encoder is not None else _default_json_encoder
             h5_file.create_dataset(
                 sample_ids_key, data=list(sample_ids), dtype=h5py.string_dtype(), compression=metadata_compression
             )
             h5_file.create_dataset(
                 sample_meta_key,
-                data=[converter.dumps(m) for m in sample_meta],
+                data=[encoder(m) for m in sample_meta],
                 dtype=h5py.string_dtype(),
                 compression=metadata_compression,
             )
