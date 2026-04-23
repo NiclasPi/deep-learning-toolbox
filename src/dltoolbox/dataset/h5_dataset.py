@@ -1,6 +1,6 @@
 import json
 from collections.abc import Sequence
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Union
 
 import h5py
 import numpy as np
@@ -31,12 +31,12 @@ class H5Dataset[T](Dataset):
         h5_label_key: str = "labels",
         h5_sample_ids_key: str = "metadata/sample_ids",
         h5_sample_meta_key: str = "metadata/sample_meta",
-        select_indices: Optional[Sequence[int]] = None,
-        static_label: Optional[Union[np.ndarray, Tensor]] = None,
+        select_indices: Sequence[int] | None = None,
+        static_label: Union[np.ndarray, Tensor, None] = None,
         data_row_dim: int = 0,
         label_row_dim: int = 0,
-        data_transform: Optional[Transformer] = None,
-        label_transform: Optional[Transformer] = None,
+        data_transform: Transformer | None = None,
+        label_transform: Transformer | None = None,
         ignore_user_block: bool = True,
         sample_meta_decoder: SampleMetaDecoder[T] | None = None,
     ) -> None:
@@ -134,7 +134,7 @@ class H5Dataset[T](Dataset):
         return self._instance.ub_size
 
     @property
-    def ub_bytes(self) -> Optional[bytes]:
+    def ub_bytes(self) -> bytes | None:
         return self._instance.ub_bytes
 
     def __len__(self) -> int:
@@ -174,17 +174,16 @@ def _default_json_encoder(obj: Any) -> bytes:
 def create_hdf5_file(
     output_path: str,
     data_arr: np.ndarray,
-    labels_arr: Optional[np.ndarray],
+    labels_arr: np.ndarray | None,
     *,
+    sample_ids: Sequence[str] | None = None,
+    sample_meta: Sequence[Any] | None = None,
     data_key: str = "data",
     labels_key: str = "labels",
     sample_ids_key: str = "metadata/sample_ids",
     sample_meta_key: str = "metadata/sample_meta",
     user_block: DatasetMetadata | bytes | None = None,
-    sample_ids: Sequence[str] | None = None,
-    sample_meta: Sequence[Any] | None = None,
     sample_meta_encoder: SampleMetaEncoder[Any] | None = None,
-    metadata_compression: str | None = "gzip",
 ) -> None:
     if (sample_ids is None) != (sample_meta is None):
         raise ValueError("sample_ids and sample_meta must be provided together")
@@ -206,18 +205,11 @@ def create_hdf5_file(
             h5_file.create_dataset(labels_key, data=labels_arr)
 
         if sample_ids is not None:
-            # default encoder handles JSON-native payloads (dict, list, primitives); callers
-            # with typed payloads (e.g. dataclasses) supply their own SampleMetaEncoder
+            # default encoder handles JSON-native payloads (dict, list, primitives);
+            # callers with typed payloads (e.g. dataclasses) supply their own SampleMetaEncoder
             encoder = sample_meta_encoder if sample_meta_encoder is not None else _default_json_encoder
-            h5_file.create_dataset(
-                sample_ids_key, data=list(sample_ids), dtype=h5py.string_dtype(), compression=metadata_compression
-            )
-            h5_file.create_dataset(
-                sample_meta_key,
-                data=[encoder(m) for m in sample_meta],
-                dtype=h5py.string_dtype(),
-                compression=metadata_compression,
-            )
+            h5_file.create_dataset(sample_ids_key, data=list(sample_ids), dtype=h5py.string_dtype())
+            h5_file.create_dataset(sample_meta_key, data=[encoder(m) for m in sample_meta], dtype=h5py.string_dtype())
 
     if ub_size > 0 and ub_bytes:
         with open(output_path, "br+") as h5_file:
