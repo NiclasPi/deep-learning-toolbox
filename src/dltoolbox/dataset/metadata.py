@@ -3,13 +3,15 @@ from __future__ import annotations
 import re
 import unicodedata
 from datetime import UTC, datetime
-from typing import Literal, Protocol, Type, TypeGuard, TypeVar, runtime_checkable
+from typing import Literal, Protocol, TypeGuard, TypeVar, runtime_checkable
 
 from attrs import field, frozen
-from cattrs.gen import make_dict_structure_fn
+from cattrs import Converter
 from cattrs.preconf.json import make_converter
 
 T = TypeVar("T")
+
+_default_converter = make_converter()
 
 
 @runtime_checkable
@@ -17,19 +19,9 @@ class ResolvableSampleMeta(Protocol[T]):
     def resolve(self, sample_id: str, dataset_metadata: DatasetMetadata[T]) -> T: ...
 
 
-def _is_resolvable(obj) -> TypeGuard[ResolvableSampleMeta[T]]:
-    try:
-        if isinstance(obj, ResolvableSampleMeta):
-            return True
-    except Exception:
-        pass
-
-    return hasattr(obj, "resolve") and callable(obj.resolve)
-
-
 @frozen(kw_only=True)
 class DatasetMetadata[T]:
-    _version: int = 1
+    version: int = 1
 
     name: str
     split: Literal["train", "valid", "test"]
@@ -44,27 +36,29 @@ class DatasetMetadata[T]:
 
     comment: str | None = None
 
-    @staticmethod
-    def from_json_bytes(json_bytes: bytes, sample_meta_type: Type[T]) -> DatasetMetadata[T]:
+    def __attrs_post_init__(self) -> None:
+        unknown = set(self.sample_meta).difference(self.sample_ids)
+        if unknown:
+            raise ValueError(
+                f"sample_meta contains {len(unknown)} id(s) not present in sample_ids: "
+                f"{sorted(unknown)[:5]}"
+            )
+
+    @classmethod
+    def from_json_bytes(
+            cls, json_bytes: bytes, sample_meta_type: type[T], converter: Converter | None = None
+    ) -> DatasetMetadata[T]:
         """Parse DatasetMetadata from JSON bytes."""
 
-        converter = make_converter()
-
-        # def sample_meta_structure_hook(val, tp):
-        #     return converter.structure(val, dict[str, sample_meta_type])
-
-        hook = make_dict_structure_fn(
-            DatasetMetadata[sample_meta_type],
-            converter,
-            # sample_meta=override(struct_hook=sample_meta_structure_hook)
-        )
-        converter.register_structure_hook(DatasetMetadata, hook)
+        if converter is None:
+            converter = _default_converter
         return converter.loads(json_bytes, DatasetMetadata[sample_meta_type])
 
-    def to_json_bytes(self) -> bytes:
+    def to_json_bytes(self, converter: Converter | None = None) -> bytes:
         """Return JSON representation as bytes."""
 
-        converter = make_converter()
+        if converter is None:
+            converter = _default_converter
         return converter.dumps(converter.unstructure(self)).encode("utf-8")
 
     @property
@@ -88,11 +82,15 @@ class DatasetMetadata[T]:
     def num_samples(self) -> int:
         return len(self.sample_ids)
 
+    @staticmethod
+    def _is_resolvable(obj: T) -> TypeGuard[ResolvableSampleMeta[T]]:
+        return isinstance(obj, ResolvableSampleMeta)
+
     def get_sample_meta_by_id(self, sample_id: str) -> T | None:
         if sample_id in self.sample_meta:
             sample_meta = self.sample_meta[sample_id]
             if sample_meta is not None:
-                if _is_resolvable(sample_meta):
+                if self._is_resolvable(sample_meta):
                     return sample_meta.resolve(sample_id, self)
                 return sample_meta
         return None
