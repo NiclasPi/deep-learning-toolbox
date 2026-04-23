@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 class H5DatasetMissingKeyError(Exception):
     def __init__(self, missing_key: str) -> None:
         super().__init__(f"Dataset is missing the following key: '{missing_key}'")
@@ -22,3 +25,34 @@ class DatasetNumSamplesMismatchError(Exception):
         super().__init__(
             f"header.num_samples does not match the HDF5 data length: {header_num_samples} vs {actual_num_samples}"
         )
+
+
+class BatchProcessItemError(Exception):
+    """Exception raised when processing an individual item in a batch fails."""
+
+    def __init__(self, file_path: Path, original_exception: Exception):
+        self.file_path = file_path
+        self.original_exception = original_exception
+        super().__init__(f"error processing file '{file_path!s}': {original_exception!s}")
+
+    def __reduce__(self):
+        # tells pickle how to reconstruct the object
+        return self.__class__, (self.file_path, self.original_exception)
+
+
+class SampleMetaPairingError(ValueError):
+    """Raised when `sample_ids` and `sample_meta` are not both provided or both omitted."""
+
+    def __init__(self) -> None:
+        super().__init__("sample_ids and sample_meta must be provided together")
+
+
+class SampleSequenceLengthMismatchError(ValueError):
+    """Raised when two per-sample sequences that must be index-matched have different lengths."""
+
+    def __init__(self, left_name: str, left_length: int, right_name: str, right_length: int) -> None:
+        super().__init__(f"{left_name} and {right_name} length mismatch: {left_length} vs {right_length}")
+        self.left_name = left_name
+        self.left_length = left_length
+        self.right_name = right_name
+        self.right_length = right_length

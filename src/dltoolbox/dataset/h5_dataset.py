@@ -1,4 +1,3 @@
-import json
 from collections.abc import Sequence
 from typing import Any, Literal, Union
 
@@ -14,7 +13,7 @@ from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.metadata.eager_sample_meta_store import EagerSampleMetaStore
 from dltoolbox.dataset.metadata.isample_meta_store import ISampleMetaStore
 from dltoolbox.dataset.metadata.lazy_sample_meta_store import LazySampleMetaStore
-from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaDecoder, SampleMetaEncoder, with_resolve
+from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaDecoder, with_resolve
 from dltoolbox.transforms import Transformer
 
 
@@ -165,52 +164,3 @@ class H5Dataset[T](Dataset):
         batched_labels = default_collate(labels)
         batched_meta = list(meta)
         return batched_data, batched_labels, batched_meta
-
-
-def _default_json_encoder(obj: Any) -> bytes:
-    return json.dumps(obj).encode("utf-8")
-
-
-def create_hdf5_file(
-    output_path: str,
-    data_arr: np.ndarray,
-    labels_arr: np.ndarray | None,
-    *,
-    sample_ids: Sequence[str] | None = None,
-    sample_meta: Sequence[Any] | None = None,
-    data_key: str = "data",
-    labels_key: str = "labels",
-    sample_ids_key: str = "metadata/sample_ids",
-    sample_meta_key: str = "metadata/sample_meta",
-    user_block: DatasetMetadata | bytes | None = None,
-    sample_meta_encoder: SampleMetaEncoder[Any] | None = None,
-) -> None:
-    if (sample_ids is None) != (sample_meta is None):
-        raise ValueError("sample_ids and sample_meta must be provided together")
-    if sample_ids is not None and len(sample_ids) != len(sample_meta):
-        raise ValueError(f"sample_ids and sample_meta length mismatch: {len(sample_ids)} vs {len(sample_meta)}")
-
-    ub_size: int = 0
-    ub_bytes: bytes | None = None
-    if user_block is not None:
-        if isinstance(user_block, DatasetMetadata):
-            ub_bytes = user_block.to_json_bytes()
-        else:
-            ub_bytes = user_block
-        ub_size = max(512, int(2 ** np.ceil(np.log2(len(ub_bytes)))))
-
-    with h5py.File(output_path, "w", userblock_size=ub_size, libver="latest") as h5_file:
-        h5_file.create_dataset(data_key, data=data_arr)
-        if labels_arr is not None:
-            h5_file.create_dataset(labels_key, data=labels_arr)
-
-        if sample_ids is not None:
-            # default encoder handles JSON-native payloads (dict, list, primitives);
-            # callers with typed payloads (e.g. dataclasses) supply their own SampleMetaEncoder
-            encoder = sample_meta_encoder if sample_meta_encoder is not None else _default_json_encoder
-            h5_file.create_dataset(sample_ids_key, data=list(sample_ids), dtype=h5py.string_dtype())
-            h5_file.create_dataset(sample_meta_key, data=[encoder(m) for m in sample_meta], dtype=h5py.string_dtype())
-
-    if ub_size > 0 and ub_bytes:
-        with open(output_path, "br+") as h5_file:
-            h5_file.write(ub_bytes)

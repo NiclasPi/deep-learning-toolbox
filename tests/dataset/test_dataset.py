@@ -7,8 +7,9 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
+from dltoolbox.dataset.create import create_dataset_from_arrays
 from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError, H5DatasetMissingKeyError
-from dltoolbox.dataset.h5_dataset import H5Dataset, create_hdf5_file
+from dltoolbox.dataset.h5_dataset import H5Dataset
 from dltoolbox.dataset.h5_dataset_disk import H5DatasetDisk
 from dltoolbox.dataset.h5_dataset_memory import H5DatasetMemory
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
@@ -45,7 +46,7 @@ def create_temporary_hdf5(tmp_path_factory, data_shape, labels_shape) -> tuple[s
     path = tmp_path_factory.mktemp("h5") / "data.h5"
     data = np.random.randn(*data_shape).astype(np.float16)
     labels = np.random.randn(*labels_shape).astype(np.float16)
-    create_hdf5_file(str(path), data, labels, user_block=USER_BLOCK_PAYLOAD)
+    create_dataset_from_arrays(str(path), data=data, labels=labels, user_block=USER_BLOCK_PAYLOAD)
     return str(path), data, labels
 
 
@@ -53,7 +54,7 @@ def create_temporary_hdf5(tmp_path_factory, data_shape, labels_shape) -> tuple[s
 def create_temporary_hdf5_data_only(tmp_path_factory, data_shape) -> tuple[str, np.ndarray]:
     path = tmp_path_factory.mktemp("h5_data_only") / "data.h5"
     data = np.random.randn(*data_shape).astype(np.float16)
-    create_hdf5_file(str(path), data, labels_arr=None, user_block=USER_BLOCK_PAYLOAD)
+    create_dataset_from_arrays(str(path), data=data, user_block=USER_BLOCK_PAYLOAD)
     return str(path), data
 
 
@@ -67,10 +68,10 @@ def create_temporary_hdf5_with_meta(tmp_path_factory, data_shape, labels_shape) 
     sample_ids = [str(i) for i in range(data_shape[0])]
     sample_meta = [SampleMeta(id=i) for i in range(data_shape[0])]
 
-    create_hdf5_file(
+    create_dataset_from_arrays(
         str(path),
-        data,
-        labels,
+        data=data,
+        labels=labels,
         user_block=header,
         sample_ids=sample_ids,
         sample_meta=sample_meta,
@@ -202,32 +203,7 @@ def test_h5_header_num_samples_mismatch_raises(data_shape, labels_shape, tmp_pat
         num_samples=data_shape[0] + 1,  # lie about the count
         origin_path="/origin",
     )
-    create_hdf5_file(str(path), data, labels, user_block=header)
+    create_dataset_from_arrays(str(path), data=data, labels=labels, user_block=header)
 
     with pytest.raises(DatasetNumSamplesMismatchError):
         H5Dataset("memory", str(path), ignore_user_block=False)
-
-
-def test_create_hdf5_file_requires_sample_ids_and_meta_together(data_shape, labels_shape, tmp_path) -> None:
-    path = tmp_path / "out.h5"
-    data = np.random.randn(*data_shape).astype(np.float16)
-    labels = np.random.randn(*labels_shape).astype(np.float16)
-
-    with pytest.raises(ValueError, match="together"):
-        create_hdf5_file(str(path), data, labels, sample_ids=[str(i) for i in range(data_shape[0])], sample_meta=None)
-
-
-def test_create_hdf5_file_sample_ids_and_meta_length_mismatch(data_shape, labels_shape, tmp_path) -> None:
-    path = tmp_path / "out.h5"
-    data = np.random.randn(*data_shape).astype(np.float16)
-    labels = np.random.randn(*labels_shape).astype(np.float16)
-
-    with pytest.raises(ValueError, match="length mismatch"):
-        create_hdf5_file(
-            str(path),
-            data,
-            labels,
-            sample_ids=["a", "b", "c"],
-            sample_meta=[SampleMeta(id=0), SampleMeta(id=1)],
-            sample_meta_encoder=_encode_sample_meta,
-        )
