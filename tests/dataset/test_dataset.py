@@ -7,7 +7,9 @@ import torch
 from torch.utils.data import DataLoader
 
 from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError, H5DatasetMissingKeyError
-from dltoolbox.dataset.h5dataset import H5Dataset, H5DatasetDisk, H5DatasetMemory, create_hdf5_file
+from dltoolbox.dataset.h5_dataset import H5Dataset, create_hdf5_file
+from dltoolbox.dataset.h5_dataset_memory import H5DatasetMemory
+from dltoolbox.dataset.h5_dataset_disk import H5DatasetDisk
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.transforms import ToTensor
 
