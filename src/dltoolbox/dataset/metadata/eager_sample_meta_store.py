@@ -39,7 +39,7 @@ class EagerSampleMetaStore[T](ISampleMetaStore[T]):
             view_ids = [all_ids[i] for i in select_indices]
             view_raw = [all_raw[i] for i in select_indices]
 
-        self._items: list[T] = [decoder(raw, sid) for sid, raw in zip(view_ids, view_raw, strict=True)]
+        self._items: list[T] = [decoder(bytes(raw), sid) for sid, raw in zip(view_ids, view_raw, strict=True)]
         self._id_to_index: dict[str, int] = {sid: i for i, sid in enumerate(view_ids)}
 
     def __len__(self) -> int:

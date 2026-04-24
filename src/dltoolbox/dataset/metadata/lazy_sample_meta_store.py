@@ -54,7 +54,7 @@ class LazySampleMetaStore[T](ISampleMetaStore[T]):
         if isinstance(sample_id, bytes):
             sample_id = sample_id.decode("utf-8")
         raw = self._sample_meta_ds[original_index]
-        return self._decoder(raw, sample_id)
+        return self._decoder(bytes(raw), sample_id)
 
     def get_by_id(self, identifier: str) -> T:
         return self.get_by_index(self._id_to_index[identifier])

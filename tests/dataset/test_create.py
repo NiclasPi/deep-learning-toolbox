@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from dltoolbox.dataset.create import create_dataset_from_arrays, create_dataset_from_paths
-from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.errors import SampleMetaPairingError, SampleSequenceLengthMismatchError
+from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 
 
 @dataclass
@@ -71,7 +71,7 @@ class TestCreateDatasetFromArrays:
 
         with h5py.File(str(out), "r") as f:
             stored_ids = [s.decode() for s in f["metadata/sample_ids"][:]]
-            stored_meta = [json.loads(raw) for raw in f["metadata/sample_meta"][:]]
+            stored_meta = [json.loads(bytes(raw)) for raw in f["metadata/sample_meta"][:]]
         assert stored_ids == ids
         assert stored_meta == [asdict(m) for m in meta]
 
@@ -133,6 +133,35 @@ class TestCreateDatasetFromArrays:
                 sample_meta=[SampleMeta(id=0), SampleMeta(id=1)],
                 sample_meta_encoder=_encode_sample_meta,
             )
+
+    @pytest.mark.parametrize("ensure_ascii", [True, False])
+    def test_sample_meta_roundtrips_non_ascii_utf8(self, tmp_path, data, ensure_ascii) -> None:
+        out = tmp_path / "out.h5"
+        non_ascii_texts = [
+            "日本語",
+            "café",
+            "naïve",
+            "emoji 🚀",
+            "Ω≈ç√∫",
+            "Привет",
+            "한국어",
+            "Ελληνικά",
+            "ü ö ä ß",
+            "𝄞 music",
+        ]
+        assert len(non_ascii_texts) == data.shape[0]
+        ids = [f"s{i}" for i in range(data.shape[0])]
+        meta = [{"text": text} for text in non_ascii_texts]
+
+        def encoder(obj):
+            return json.dumps(obj, ensure_ascii=ensure_ascii).encode("utf-8")
+
+        create_dataset_from_arrays(str(out), data=data, sample_ids=ids, sample_meta=meta, sample_meta_encoder=encoder)
+
+        with h5py.File(str(out), "r") as f:
+            raw_meta = f["metadata/sample_meta"][:]
+        decoded = [json.loads(bytes(raw)) for raw in raw_meta]
+        assert decoded == meta
 
 
 class TestCreateDatasetFromPaths:

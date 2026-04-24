@@ -22,6 +22,15 @@ def _default_json_encoder(obj: Any) -> bytes:
     return json.dumps(obj).encode("utf-8")
 
 
+def _encode_meta_to_vlen_uint8(sample_meta: Sequence[Any], encoder: SampleMetaEncoder[Any]) -> np.ndarray:
+    # Build a 1-D object array of uint8 arrays; constructing this column-wise avoids
+    # numpy auto-stacking equal-length rows into a 2-D array, which h5py's vlen writer rejects.
+    out = np.empty(len(sample_meta), dtype=object)
+    for i, m in enumerate(sample_meta):
+        out[i] = np.frombuffer(encoder(m), dtype=np.uint8)
+    return out
+
+
 def _prepare_user_block(user_block: DatasetMetadata | bytes | None) -> tuple[int, bytes | None]:
     if user_block is None:
         return 0, None
@@ -117,7 +126,9 @@ def create_dataset_from_arrays(
             # callers with typed payloads (e.g. dataclasses) supply their own SampleMetaEncoder
             encoder = sample_meta_encoder if sample_meta_encoder is not None else _default_json_encoder
             h5_file.create_dataset(sample_ids_key, data=list(sample_ids), dtype=h5py.string_dtype())
-            h5_file.create_dataset(sample_meta_key, data=[encoder(m) for m in sample_meta], dtype=h5py.string_dtype())
+            h5_file.create_dataset(
+                sample_meta_key, data=_encode_meta_to_vlen_uint8(sample_meta, encoder), dtype=h5py.vlen_dtype(np.uint8)
+            )
 
     if ub_size > 0 and ub_bytes:
         with open(output_path, "br+") as h5_file:
@@ -379,7 +390,9 @@ def create_dataset_from_paths(
                 ordered_meta = [sample_meta[i] for i in original_indices_in_order]
                 h5_file.create_dataset(sample_ids_key, data=ordered_ids, dtype=h5py.string_dtype())
                 h5_file.create_dataset(
-                    sample_meta_key, data=[encoder(m) for m in ordered_meta], dtype=h5py.string_dtype()
+                    sample_meta_key,
+                    data=_encode_meta_to_vlen_uint8(ordered_meta, encoder),
+                    dtype=h5py.vlen_dtype(np.uint8),
                 )
     finally:
         for shm in slot_shms:
