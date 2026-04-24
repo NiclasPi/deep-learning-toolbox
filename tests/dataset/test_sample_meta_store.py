@@ -172,6 +172,94 @@ def test_decoder_receives_sample_id(h5: h5py.File, store_cls: type[ISampleMetaSt
     assert set(seen) == set(ids)
 
 
+def test_get_all_ids_returns_view_order(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    ids = ["01", "02", "03"]
+    metas = [Meta(name=f"n{i}", size=i) for i in range(3)]
+    _write_meta_datasets(h5, ids, metas)
+
+    store = store_cls(
+        decoder=_decode_meta, sample_ids_ds=h5["/metadata/sample_ids"], sample_meta_ds=h5["/metadata/sample_meta"]
+    )
+
+    assert list(store.get_all_ids()) == ids
+
+
+def test_get_all_ids_respects_select_indices(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    ids = ["01", "02", "03", "04", "05"]
+    metas = [Meta(name=f"n{i}", size=i) for i in range(5)]
+    _write_meta_datasets(h5, ids, metas)
+
+    selection = [4, 0, 2]
+    store = store_cls(
+        decoder=_decode_meta,
+        sample_ids_ds=h5["/metadata/sample_ids"],
+        sample_meta_ds=h5["/metadata/sample_meta"],
+        select_indices=selection,
+    )
+
+    assert list(store.get_all_ids()) == [ids[i] for i in selection]
+
+
+def test_get_all_ids_returns_copy(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    ids = ["01", "02"]
+    metas = [Meta(name="a", size=1), Meta(name="b", size=2)]
+    _write_meta_datasets(h5, ids, metas)
+
+    store = store_cls(
+        decoder=_decode_meta, sample_ids_ds=h5["/metadata/sample_ids"], sample_meta_ds=h5["/metadata/sample_meta"]
+    )
+
+    first = store.get_all_ids()
+    list(first).clear()  # mutating a caller-held list must not leak into the store
+    assert list(store.get_all_ids()) == ids
+
+
+def test_get_all_returns_id_item_pairs(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    ids = ["01", "02", "03"]
+    metas = [Meta(name=f"n{i}", size=i) for i in range(3)]
+    _write_meta_datasets(h5, ids, metas)
+
+    store = store_cls(
+        decoder=_decode_meta, sample_ids_ds=h5["/metadata/sample_ids"], sample_meta_ds=h5["/metadata/sample_meta"]
+    )
+
+    assert list(store.get_all()) == list(zip(ids, metas, strict=True))
+
+
+def test_get_all_respects_select_indices(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    ids = ["01", "02", "03", "04", "05"]
+    metas = [Meta(name=f"n{i}", size=i) for i in range(5)]
+    _write_meta_datasets(h5, ids, metas)
+
+    selection = [4, 0, 2]
+    store = store_cls(
+        decoder=_decode_meta,
+        sample_ids_ds=h5["/metadata/sample_ids"],
+        sample_meta_ds=h5["/metadata/sample_meta"],
+        select_indices=selection,
+    )
+
+    assert list(store.get_all()) == [(ids[i], metas[i]) for i in selection]
+
+
+def test_get_all_applies_resolve(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    ids = ["01", "02"]
+    metas = [ResolvableMeta(name=f"n{i}") for i in range(2)]
+    _write_meta_datasets(h5, ids, metas)
+
+    header = _header(2)
+    decoder: SampleMetaDecoder[ResolvableMeta] = with_resolve(_decode_resolvable, header)
+    store = store_cls(
+        decoder=decoder, sample_ids_ds=h5["/metadata/sample_ids"], sample_meta_ds=h5["/metadata/sample_meta"]
+    )
+
+    pairs = list(store.get_all())
+    assert [sid for sid, _ in pairs] == ids
+    for sid, item in pairs:
+        assert item.id == sid
+        assert item.split == header.split
+
+
 def test_read_ids_decodes_bytes_entries(h5: h5py.File) -> None:
     h5.create_dataset("/ids_bytes", data=[b"01", b"02", b"03"], dtype=h5py.string_dtype())
     assert read_ids(h5["/ids_bytes"]) == ["01", "02", "03"]

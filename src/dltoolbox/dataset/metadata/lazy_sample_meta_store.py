@@ -39,9 +39,11 @@ class LazySampleMetaStore[T](ISampleMetaStore[T]):
 
         all_ids = read_ids(sample_ids_ds)
         if self._original_indices is None:
+            self._ids: list[str] = list(all_ids)
             self._id_to_index: dict[str, int] = {sid: i for i, sid in enumerate(all_ids)}
         else:
-            self._id_to_index = {all_ids[orig]: ext for ext, orig in enumerate(self._original_indices)}
+            self._ids = [all_ids[orig] for orig in self._original_indices]
+            self._id_to_index = {sid: ext for ext, sid in enumerate(self._ids)}
 
     def __len__(self) -> int:
         if self._original_indices is not None:
@@ -58,3 +60,9 @@ class LazySampleMetaStore[T](ISampleMetaStore[T]):
 
     def get_by_id(self, identifier: str) -> T:
         return self.get_by_index(self._id_to_index[identifier])
+
+    def get_all_ids(self) -> Sequence[str]:
+        return list(self._ids)
+
+    def get_all(self) -> Sequence[tuple[str, T]]:
+        return [(sid, self.get_by_index(i)) for i, sid in enumerate(self._ids)]

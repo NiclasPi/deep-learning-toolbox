@@ -39,6 +39,7 @@ class EagerSampleMetaStore[T](ISampleMetaStore[T]):
             view_ids = [all_ids[i] for i in select_indices]
             view_raw = [all_raw[i] for i in select_indices]
 
+        self._ids: list[str] = list(view_ids)
         self._items: list[T] = [decoder(bytes(raw), sid) for sid, raw in zip(view_ids, view_raw, strict=True)]
         self._id_to_index: dict[str, int] = {sid: i for i, sid in enumerate(view_ids)}
 
@@ -50,3 +51,9 @@ class EagerSampleMetaStore[T](ISampleMetaStore[T]):
 
     def get_by_id(self, identifier: str) -> T:
         return self._items[self._id_to_index[identifier]]
+
+    def get_all_ids(self) -> Sequence[str]:
+        return list(self._ids)
+
+    def get_all(self) -> Sequence[tuple[str, T]]:
+        return list(zip(self._ids, self._items, strict=True))
