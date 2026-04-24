@@ -38,6 +38,7 @@ class H5Dataset[T](Dataset):
         label_transform: Transformer | None = None,
         ignore_user_block: bool = True,
         sample_meta_decoder: SampleMetaDecoder[T] | None = None,
+        sample_meta_store_mode: Literal["lazy", "eager", "auto"] = "auto",
     ) -> None:
         if mode == "disk":
             self._instance = H5DatasetDisk(
@@ -82,9 +83,14 @@ class H5Dataset[T](Dataset):
                 raise DatasetNumSamplesMismatchError(self._header.num_samples, actual_num_samples)
 
             if sample_meta_decoder is not None:
+                if sample_meta_store_mode == "auto":
+                    store_mode = "lazy" if mode == "disk" else "eager"
+                else:
+                    store_mode = sample_meta_store_mode
+
                 self._store = self._build_store(
                     h5_path=h5_path,
-                    mode=mode,
+                    store_mode=store_mode,  # type: ignore
                     header=self._header,
                     h5_sample_ids_key=h5_sample_ids_key,
                     h5_sample_meta_key=h5_sample_meta_key,
@@ -96,7 +102,7 @@ class H5Dataset[T](Dataset):
         self,
         *,
         h5_path: str,
-        mode: Literal["disk", "memory"],
+        store_mode: Literal["lazy", "eager"],
         header: DatasetMetadata,
         h5_sample_ids_key: str,
         h5_sample_meta_key: str,
@@ -106,7 +112,7 @@ class H5Dataset[T](Dataset):
         # bind the header once so objects implementing ResolvableSampleMeta are resolved
         # automatically; non-resolvable payloads pass through unchanged
         decoder = with_resolve(sample_meta_decoder, header)
-        if mode == "disk":
+        if store_mode == "lazy":
             # share the already-open file handle from the disk instance
             f = self._instance.h5_file
             return LazySampleMetaStore(
@@ -115,6 +121,8 @@ class H5Dataset[T](Dataset):
                 decoder=decoder,
                 select_indices=select_indices,
             )
+        elif store_mode != "eager":
+            raise ValueError(f'unknown mode "{store_mode}" for sample meta store')
         # memory mode: open briefly to eagerly decode into RAM, then drop the handle
         with h5py.File(h5_path, "r") as f:
             return EagerSampleMetaStore(
