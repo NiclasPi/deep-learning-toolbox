@@ -47,6 +47,20 @@ class SampleMetaPairingError(ValueError):
         super().__init__("sample_ids and sample_meta must be provided together")
 
 
+class SampleMetaStoreUnavailableError(RuntimeError):
+    """Raised when sample metadata is requested but no store was built.
+
+    This happens when the dataset was constructed with ``ignore_user_block=True`` or
+    without a ``sample_meta_decoder``, so sample ids/meta are not accessible.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "sample metadata store is not initialized "
+            "(constructed with ignore_user_block=True or without sample_meta_decoder)"
+        )
+
+
 class SampleSequenceLengthMismatchError(ValueError):
     """Raised when two per-sample sequences that must be index-matched have different lengths."""
 

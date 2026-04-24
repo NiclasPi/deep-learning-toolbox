@@ -6,7 +6,7 @@ import numpy as np
 from torch import Tensor
 from torch.utils.data import Dataset, default_collate
 
-from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError
+from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError, SampleMetaStoreUnavailableError
 from dltoolbox.dataset.h5_dataset_disk import H5DatasetDisk
 from dltoolbox.dataset.h5_dataset_memory import H5DatasetMemory
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
@@ -162,6 +162,16 @@ class H5Dataset[T](Dataset):
             setattr(self._instance, key, value)
         else:
             self.__dict__[key] = value
+
+    def get_all_sample_ids(self) -> Sequence[str]:
+        if self._store is None:
+            raise SampleMetaStoreUnavailableError
+        return self._store.get_all_ids()
+
+    def get_all_sample_ids_with_meta(self) -> Sequence[tuple[str, T]]:
+        if self._store is None:
+            raise SampleMetaStoreUnavailableError
+        return self._store.get_all()
 
     @staticmethod
     def collate_fn(batch) -> tuple[Any, Any, list[Any]]:
