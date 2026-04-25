@@ -61,8 +61,8 @@ class LazySampleMetaStore[T](ISampleMetaStore[T]):
     def get_by_id(self, identifier: str) -> T:
         return self.get_by_index(self._id_to_index[identifier])
 
-    def get_all_ids(self) -> Sequence[str]:
+    def get_all_ids(self) -> list[str]:
         return list(self._ids)
 
-    def get_all(self) -> Sequence[tuple[str, T]]:
+    def get_all(self) -> list[tuple[str, T]]:
         return [(sid, self.get_by_index(i)) for i, sid in enumerate(self._ids)]

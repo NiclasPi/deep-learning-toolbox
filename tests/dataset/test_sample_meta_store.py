@@ -5,7 +5,6 @@ from dataclasses import asdict, dataclass, replace
 import h5py
 import pytest
 
-from dltoolbox.dataset._utils import read_ids
 from dltoolbox.dataset.errors import SampleMetaLengthMismatchError
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.metadata.eager_sample_meta_store import EagerSampleMetaStore
@@ -200,7 +199,8 @@ def test_get_all_ids_respects_select_indices(h5: h5py.File, store_cls: type[ISam
     assert list(store.get_all_ids()) == [ids[i] for i in selection]
 
 
-def test_get_all_ids_returns_copy(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+def test_get_all_ids_returns_independent_list(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    """Mutating the returned list must not affect subsequent reads from the store."""
     ids = ["01", "02"]
     metas = [Meta(name="a", size=1), Meta(name="b", size=2)]
     _write_meta_datasets(h5, ids, metas)
@@ -210,8 +210,23 @@ def test_get_all_ids_returns_copy(h5: h5py.File, store_cls: type[ISampleMetaStor
     )
 
     first = store.get_all_ids()
-    list(first).clear()  # mutating a caller-held list must not leak into the store
-    assert list(store.get_all_ids()) == ids
+    first.clear()
+    assert store.get_all_ids() == ids
+
+
+def test_get_all_returns_independent_list(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    """Mutating the returned list must not affect subsequent reads from the store."""
+    ids = ["01", "02"]
+    metas = [Meta(name="a", size=1), Meta(name="b", size=2)]
+    _write_meta_datasets(h5, ids, metas)
+
+    store = store_cls(
+        decoder=_decode_meta, sample_ids_ds=h5["/metadata/sample_ids"], sample_meta_ds=h5["/metadata/sample_meta"]
+    )
+
+    first = store.get_all()
+    first.clear()
+    assert store.get_all() == list(zip(ids, metas, strict=True))
 
 
 def test_get_all_returns_id_item_pairs(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
@@ -258,18 +273,3 @@ def test_get_all_applies_resolve(h5: h5py.File, store_cls: type[ISampleMetaStore
     for sid, item in pairs:
         assert item.id == sid
         assert item.split == header.split
-
-
-def test_read_ids_decodes_bytes_entries(h5: h5py.File) -> None:
-    h5.create_dataset("/ids_bytes", data=[b"01", b"02", b"03"], dtype=h5py.string_dtype())
-    assert read_ids(h5["/ids_bytes"]) == ["01", "02", "03"]
-
-
-def test_read_ids_passes_str_entries_through() -> None:
-    # h5py's returned dtype depends on how the dataset was written and on the h5py
-    # version — str entries are a real possibility, not a hypothetical. Covering this
-    # branch guards against a regression where a future refactor (e.g. unconditional
-    # .decode()) would crash on str input. A plain list is sufficient: read_ids only
-    # requires ds[:] to yield an iterable, and the branch under test is the
-    # isinstance(s, bytes) check — no h5py machinery needed.
-    assert read_ids(["a", "b"]) == ["a", "b"]

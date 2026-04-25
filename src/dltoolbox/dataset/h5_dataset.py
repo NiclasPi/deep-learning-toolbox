@@ -223,12 +223,12 @@ class H5Dataset[T](Dataset):
         else:
             self.__dict__[key] = value
 
-    def get_all_sample_ids(self) -> Sequence[str]:
+    def get_all_sample_ids(self) -> list[str]:
         if self._store is None:
             raise SampleMetaStoreUnavailableError
         return self._store.get_all_ids()
 
-    def get_all_sample_ids_with_meta(self) -> Sequence[tuple[str, T]]:
+    def get_all_sample_ids_with_meta(self) -> list[tuple[str, T]]:
         if self._store is None:
             raise SampleMetaStoreUnavailableError
         return self._store.get_all()

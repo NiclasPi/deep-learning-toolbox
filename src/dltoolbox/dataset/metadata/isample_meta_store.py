@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 
 
 class ISampleMetaStore[T](ABC):
@@ -15,8 +14,8 @@ class ISampleMetaStore[T](ABC):
     def get_by_id(self, identifier: str) -> T:
         raise NotImplementedError
 
-    def get_all_ids(self) -> Sequence[str]:
+    def get_all_ids(self) -> list[str]:
         raise NotImplementedError
 
-    def get_all(self) -> Sequence[tuple[str, T]]:
+    def get_all(self) -> list[tuple[str, T]]:
         raise NotImplementedError

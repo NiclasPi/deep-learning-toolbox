@@ -40,7 +40,7 @@ def sample_paths() -> list[Path]:
 
 
 class TestCreateDatasetFromArrays:
-    def test_writes_data_array(self, tmp_path, data) -> None:
+    def test_data_array_is_persisted_with_original_shape_and_dtype(self, tmp_path, data) -> None:
         out = tmp_path / "out.h5"
         create_dataset_from_arrays(str(out), data=data)
         with h5py.File(str(out), "r") as f:
@@ -48,19 +48,19 @@ class TestCreateDatasetFromArrays:
             assert f["data"].dtype == data.dtype
             assert np.array_equal(f["data"][:], data)
 
-    def test_writes_labels_when_provided(self, tmp_path, data, labels) -> None:
+    def test_labels_dataset_is_created_when_labels_are_provided(self, tmp_path, data, labels) -> None:
         out = tmp_path / "out.h5"
         create_dataset_from_arrays(str(out), data=data, labels=labels)
         with h5py.File(str(out), "r") as f:
             assert np.array_equal(f["labels"][:], labels)
 
-    def test_omits_labels_when_none(self, tmp_path, data) -> None:
+    def test_labels_dataset_is_absent_when_no_labels_are_provided(self, tmp_path, data) -> None:
         out = tmp_path / "out.h5"
         create_dataset_from_arrays(str(out), data=data)
         with h5py.File(str(out), "r") as f:
             assert "labels" not in f
 
-    def test_writes_sample_ids_and_meta(self, tmp_path, data) -> None:
+    def test_sample_ids_and_meta_roundtrip_through_metadata_group(self, tmp_path, data) -> None:
         out = tmp_path / "out.h5"
         ids = [f"s{i}" for i in range(data.shape[0])]
         meta = [SampleMeta(id=i) for i in range(data.shape[0])]
@@ -75,14 +75,14 @@ class TestCreateDatasetFromArrays:
         assert stored_ids == ids
         assert stored_meta == [asdict(m) for m in meta]
 
-    def test_writes_raw_user_block_bytes(self, tmp_path, data) -> None:
+    def test_raw_bytes_user_block_is_written_verbatim(self, tmp_path, data) -> None:
         payload = b"hello userblock"
         out = tmp_path / "out.h5"
         create_dataset_from_arrays(str(out), data=data, user_block=payload)
         with open(str(out), "rb") as f:
             assert f.read(len(payload)) == payload
 
-    def test_writes_dataset_metadata_as_user_block(self, tmp_path, data) -> None:
+    def test_dataset_metadata_is_serialized_into_user_block(self, tmp_path, data) -> None:
         header = DatasetMetadata(name="t", split="train", num_samples=data.shape[0], origin_path="/x")
         out = tmp_path / "out.h5"
         create_dataset_from_arrays(str(out), data=data, user_block=header)
@@ -90,7 +90,7 @@ class TestCreateDatasetFromArrays:
         with open(str(out), "rb") as f:
             assert f.read(len(header_bytes)) == header_bytes
 
-    def test_applies_chunking_and_compression(self, tmp_path, data) -> None:
+    def test_chunking_and_compression_options_are_honored(self, tmp_path, data) -> None:
         out = tmp_path / "out.h5"
         create_dataset_from_arrays(str(out), data=data, h5_chunk_length=2, h5_compression="gzip", h5_compression_opts=4)
         with h5py.File(str(out), "r") as f:
@@ -99,20 +99,20 @@ class TestCreateDatasetFromArrays:
             assert ds.compression == "gzip"
             assert ds.compression_opts == 4
 
-    def test_raises_when_output_path_exists(self, tmp_path, data) -> None:
+    def test_refuses_to_overwrite_an_existing_output_file(self, tmp_path, data) -> None:
         out = tmp_path / "out.h5"
         create_dataset_from_arrays(str(out), data=data)
         with pytest.raises(FileExistsError):
             create_dataset_from_arrays(str(out), data=data)
 
-    def test_raises_when_sample_ids_provided_without_sample_meta(self, tmp_path, data) -> None:
+    def test_sample_ids_without_sample_meta_is_rejected(self, tmp_path, data) -> None:
         out = tmp_path / "out.h5"
         with pytest.raises(SampleMetaPairingError):
             create_dataset_from_arrays(
                 str(out), data=data, sample_ids=[f"s{i}" for i in range(data.shape[0])], sample_meta=None
             )
 
-    def test_raises_when_sample_meta_provided_without_sample_ids(self, tmp_path, data) -> None:
+    def test_sample_meta_without_sample_ids_is_rejected(self, tmp_path, data) -> None:
         out = tmp_path / "out.h5"
         with pytest.raises(SampleMetaPairingError):
             create_dataset_from_arrays(
@@ -123,7 +123,7 @@ class TestCreateDatasetFromArrays:
                 sample_meta_encoder=_encode_sample_meta,
             )
 
-    def test_raises_when_sample_ids_and_meta_have_different_lengths(self, tmp_path, data) -> None:
+    def test_sample_ids_and_sample_meta_must_have_equal_length(self, tmp_path, data) -> None:
         out = tmp_path / "out.h5"
         with pytest.raises(SampleSequenceLengthMismatchError):
             create_dataset_from_arrays(
@@ -135,7 +135,7 @@ class TestCreateDatasetFromArrays:
             )
 
     @pytest.mark.parametrize("ensure_ascii", [True, False])
-    def test_sample_meta_roundtrips_non_ascii_utf8(self, tmp_path, data, ensure_ascii) -> None:
+    def test_sample_meta_preserves_non_ascii_utf8_under_either_encoder_mode(self, tmp_path, data, ensure_ascii) -> None:
         out = tmp_path / "out.h5"
         non_ascii_texts = [
             "日本語",
@@ -172,7 +172,7 @@ class TestCreateDatasetFromPaths:
 
         monkeypatch.setattr("dltoolbox.dataset.create.ProcessPoolExecutor", _raise)
 
-    def test_raises_when_sample_ids_provided_without_sample_meta(self, tmp_path, sample_paths) -> None:
+    def test_sample_ids_without_sample_meta_is_rejected(self, tmp_path, sample_paths) -> None:
         out = tmp_path / "out.h5"
         with pytest.raises(SampleMetaPairingError):
             create_dataset_from_paths(
@@ -185,7 +185,7 @@ class TestCreateDatasetFromPaths:
                 sample_meta=None,
             )
 
-    def test_raises_when_sample_meta_provided_without_sample_ids(self, tmp_path, sample_paths) -> None:
+    def test_sample_meta_without_sample_ids_is_rejected(self, tmp_path, sample_paths) -> None:
         out = tmp_path / "out.h5"
         with pytest.raises(SampleMetaPairingError):
             create_dataset_from_paths(
@@ -199,7 +199,7 @@ class TestCreateDatasetFromPaths:
                 sample_meta_encoder=_encode_sample_meta,
             )
 
-    def test_raises_when_labels_length_differs_from_sample_paths(self, tmp_path, sample_paths) -> None:
+    def test_labels_length_must_match_sample_paths_length(self, tmp_path, sample_paths) -> None:
         out = tmp_path / "out.h5"
         with pytest.raises(SampleSequenceLengthMismatchError):
             create_dataset_from_paths(
@@ -211,7 +211,7 @@ class TestCreateDatasetFromPaths:
                 labels=np.zeros(len(sample_paths) - 1, dtype=np.int32),
             )
 
-    def test_raises_when_sample_ids_length_differs_from_sample_paths(self, tmp_path, sample_paths) -> None:
+    def test_sample_ids_length_must_match_sample_paths_length(self, tmp_path, sample_paths) -> None:
         out = tmp_path / "out.h5"
         short_length = len(sample_paths) - 1
         with pytest.raises(SampleSequenceLengthMismatchError):
@@ -226,7 +226,7 @@ class TestCreateDatasetFromPaths:
                 sample_meta_encoder=_encode_sample_meta,
             )
 
-    def test_raises_when_sample_meta_length_differs_from_sample_paths(self, tmp_path, sample_paths) -> None:
+    def test_sample_meta_length_must_match_sample_paths_length(self, tmp_path, sample_paths) -> None:
         out = tmp_path / "out.h5"
         with pytest.raises(SampleSequenceLengthMismatchError):
             create_dataset_from_paths(

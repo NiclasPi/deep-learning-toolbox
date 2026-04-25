@@ -52,8 +52,8 @@ class EagerSampleMetaStore[T](ISampleMetaStore[T]):
     def get_by_id(self, identifier: str) -> T:
         return self._items[self._id_to_index[identifier]]
 
-    def get_all_ids(self) -> Sequence[str]:
+    def get_all_ids(self) -> list[str]:
         return list(self._ids)
 
-    def get_all(self) -> Sequence[tuple[str, T]]:
+    def get_all(self) -> list[tuple[str, T]]:
         return list(zip(self._ids, self._items, strict=True))
