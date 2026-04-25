@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from pathlib import Path
 
 
@@ -50,15 +51,39 @@ class SampleMetaPairingError(ValueError):
 class SampleMetaStoreUnavailableError(RuntimeError):
     """Raised when sample metadata is requested but no store was built.
 
-    This happens when the dataset was constructed with ``ignore_user_block=True`` or
-    without a ``sample_meta_decoder``, so sample ids/meta are not accessible.
+    This happens when the dataset was constructed without a ``sample_meta_decoder``,
+    so sample ids/meta are not accessible.
     """
 
     def __init__(self) -> None:
-        super().__init__(
-            "sample metadata store is not initialized "
-            "(constructed with ignore_user_block=True or without sample_meta_decoder)"
-        )
+        super().__init__("sample metadata store is not initialized (constructed without sample_meta_decoder)")
+
+
+class ConflictingSelectorsError(ValueError):
+    """Raised when both ``select_indices`` and ``select_sample_ids`` are given to H5Dataset."""
+
+    def __init__(self) -> None:
+        super().__init__("select_indices and select_sample_ids are mutually exclusive; provide at most one")
+
+
+class UnknownSampleIdsError(ValueError):
+    """Raised when ``select_sample_ids`` contains ids not present in the dataset's sample_ids."""
+
+    def __init__(self, missing_ids: Sequence[str]) -> None:
+        self.missing_ids: list[str] = list(missing_ids)
+        preview = ", ".join(repr(s) for s in self.missing_ids[:5])
+        suffix = f" (and {len(self.missing_ids) - 5} more)" if len(self.missing_ids) > 5 else ""
+        super().__init__(f"sample ids not found in dataset: [{preview}]{suffix}")
+
+
+class DuplicateSampleIdsError(ValueError):
+    """Raised when ``select_sample_ids`` contains the same id more than once."""
+
+    def __init__(self, duplicate_ids: Sequence[str]) -> None:
+        self.duplicate_ids: list[str] = list(duplicate_ids)
+        preview = ", ".join(repr(s) for s in self.duplicate_ids[:5])
+        suffix = f" (and {len(self.duplicate_ids) - 5} more)" if len(self.duplicate_ids) > 5 else ""
+        super().__init__(f"select_sample_ids contains duplicates: [{preview}]{suffix}")
 
 
 class SampleSequenceLengthMismatchError(ValueError):

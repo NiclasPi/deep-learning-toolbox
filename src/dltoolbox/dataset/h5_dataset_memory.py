@@ -5,7 +5,8 @@ import numpy as np
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from dltoolbox.dataset.errors import H5DatasetMissingKeyError, H5DatasetShapeMismatchError
+from dltoolbox.dataset._utils import require_key
+from dltoolbox.dataset.errors import H5DatasetShapeMismatchError
 from dltoolbox.transforms import Transformer
 
 
@@ -45,45 +46,20 @@ class H5DatasetMemory(Dataset):
                 self._ub_bytes = h5_file.read(self._ub_size)
 
         with h5py.File(h5_path, "r") as h5_file:
-            if h5_data_key not in h5_file:
-                raise H5DatasetMissingKeyError(h5_data_key)
+            require_key(h5_file, h5_data_key)
             if self.static_label is None:
-                if h5_label_key not in h5_file:
-                    raise H5DatasetMissingKeyError(h5_label_key)
+                require_key(h5_file, h5_label_key)
                 if h5_file[h5_data_key].shape[data_row_dim] != h5_file[h5_label_key].shape[label_row_dim]:
                     raise H5DatasetShapeMismatchError(
                         h5_file[h5_data_key].shape[data_row_dim], h5_file[h5_label_key].shape[label_row_dim]
                     )
 
             h5_data: h5py.Dataset = h5_file[h5_data_key]
-            if select_indices is not None:
-                data_shape = tuple(
-                    [s if d != data_row_dim else len(select_indices) for d, s in enumerate(h5_data.shape)]
-                )
-                data_source_sel = tuple(
-                    [slice(None) if d != data_row_dim else select_indices for d, s in enumerate(h5_data.shape)]
-                )
-                self.data = np.empty(data_shape, dtype=h5_data.dtype)
-                h5_data.read_direct(self.data, source_sel=data_source_sel)
-            else:
-                self.data = np.empty(h5_data.shape, dtype=h5_data.dtype)
-                h5_data.read_direct(self.data)
+            self.data = self._read_into_memory(h5_data, select_indices=select_indices, row_dim=data_row_dim)
 
             if self.static_label is None:
                 h5_labels: h5py.Dataset = h5_file[h5_label_key]
-                if select_indices is not None:
-                    labels_shape = tuple(
-                        [s if d != label_row_dim else len(select_indices) for d, s in enumerate(h5_labels.shape)]
-                    )
-                    labels_source_sel = tuple(
-                        [slice(None) if d != label_row_dim else select_indices for d, s in enumerate(h5_labels.shape)]
-                    )
-                    self.labels = np.empty(labels_shape, dtype=h5_labels.dtype)
-                    h5_labels.read_direct(self.labels, source_sel=labels_source_sel)
-                else:
-                    self.labels = np.empty(h5_labels.shape, dtype=h5_labels.dtype)
-                    h5_labels.read_direct(self.labels)
-
+                self.labels = self._read_into_memory(h5_labels, select_indices=select_indices, row_dim=label_row_dim)
                 assert self.data.shape[data_row_dim] == self.labels.shape[label_row_dim]
             else:
                 self.labels = None
@@ -111,3 +87,39 @@ class H5DatasetMemory(Dataset):
             label = self.label_transform(label)
 
         return data, label
+
+    @staticmethod
+    def _read_into_memory(
+        h5_dataset: h5py.Dataset, *, select_indices: Optional[Sequence[int]], row_dim: int
+    ) -> np.ndarray:
+        """Materialize an h5 dataset (or a row selection of it) into a numpy array.
+
+        With ``select_indices=None`` the full dataset is read in one ``read_direct`` call.
+        With a selection, rows are read in sorted-unique order (h5py's ``source_sel``
+        rejects non-monotonic indices) and then projected back into the caller's order,
+        which may repeat or reorder rows freely. The extra in-memory shuffle keeps the
+        selection contract identical to disk mode.
+
+        Args:
+            h5_dataset: source dataset on disk.
+            select_indices: row positions along ``row_dim`` to materialize, in caller
+                order; ``None`` reads the full dataset.
+            row_dim: axis to which ``select_indices`` applies.
+
+        Returns:
+            A new numpy array; mutating it does not touch ``h5_dataset``.
+        """
+        if select_indices is None:
+            out = np.empty(h5_dataset.shape, dtype=h5_dataset.dtype)
+            h5_dataset.read_direct(out)
+            return out
+
+        sorted_unique = sorted(set(select_indices))
+        compact_shape = tuple(s if d != row_dim else len(sorted_unique) for d, s in enumerate(h5_dataset.shape))
+        compact_source_sel = tuple(slice(None) if d != row_dim else sorted_unique for d in range(h5_dataset.ndim))
+        compact = np.empty(compact_shape, dtype=h5_dataset.dtype)
+        h5_dataset.read_direct(compact, source_sel=compact_source_sel)
+
+        position_in_compact = {orig: pos for pos, orig in enumerate(sorted_unique)}
+        reorder = [position_in_compact[i] for i in select_indices]
+        return np.take(compact, reorder, axis=row_dim)

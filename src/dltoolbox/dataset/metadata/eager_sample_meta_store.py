@@ -4,8 +4,8 @@ from collections.abc import Sequence
 
 import h5py
 
+from dltoolbox.dataset._utils import read_ids
 from dltoolbox.dataset.errors import SampleMetaLengthMismatchError
-from dltoolbox.dataset.metadata._utils import read_ids
 from dltoolbox.dataset.metadata.isample_meta_store import ISampleMetaStore
 from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaDecoder
 

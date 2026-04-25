@@ -8,7 +8,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from dltoolbox.dataset.create import create_dataset_from_arrays
-from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError, H5DatasetMissingKeyError
+from dltoolbox.dataset.errors import (
+    ConflictingSelectorsError,
+    DatasetNumSamplesMismatchError,
+    DuplicateSampleIdsError,
+    H5DatasetMissingKeyError,
+    UnknownSampleIdsError,
+)
 from dltoolbox.dataset.h5_dataset import H5Dataset
 from dltoolbox.dataset.h5_dataset_disk import H5DatasetDisk
 from dltoolbox.dataset.h5_dataset_memory import H5DatasetMemory
@@ -64,15 +70,38 @@ def create_temporary_hdf5_with_meta(tmp_path_factory, data_shape, labels_shape) 
     data = np.random.randn(*data_shape).astype(np.float16)
     labels = np.random.randn(*labels_shape).astype(np.float16)
 
-    header = DatasetMetadata(name="test", split="train", num_samples=data_shape[0], origin_path="/path/to/origin")
-    sample_ids = [str(i) for i in range(data_shape[0])]
+    metadata = DatasetMetadata(name="test", split="train", num_samples=data_shape[0], origin_path="/path/to/origin")
+    sample_ids = [f"s{i}" for i in range(data_shape[0])]
     sample_meta = [SampleMeta(id=i) for i in range(data_shape[0])]
 
     create_dataset_from_arrays(
         str(path),
         data=data,
         labels=labels,
-        user_block=header,
+        user_block=metadata,
+        sample_ids=sample_ids,
+        sample_meta=sample_meta,
+        sample_meta_encoder=_encode_sample_meta,
+    )
+    return str(path), data, labels
+
+
+@pytest.fixture(scope="module")
+def create_temporary_hdf5_meta_no_user_block(
+    tmp_path_factory, data_shape, labels_shape
+) -> tuple[str, np.ndarray, np.ndarray]:
+    """Per-sample ids+meta present, but no metadata header"""
+    path = tmp_path_factory.mktemp("h5_meta_no_ub") / "data.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    labels = np.random.randn(*labels_shape).astype(np.float16)
+
+    sample_ids = [f"s{i}" for i in range(data_shape[0])]
+    sample_meta = [SampleMeta(id=i) for i in range(data_shape[0])]
+
+    create_dataset_from_arrays(
+        str(path),
+        data=data,
+        labels=labels,
         sample_ids=sample_ids,
         sample_meta=sample_meta,
         sample_meta_encoder=_encode_sample_meta,
@@ -112,6 +141,42 @@ def test_select_indices_exposes_subset(create_temporary_hdf5, mode: Literal["dis
         assert label.shape == tuple([s for d, s in enumerate(labels.shape) if d != axis])
         assert np.allclose(np.take(data, indices[i], axis=axis), sample)
         assert np.allclose(np.take(labels, indices[i], axis=axis), label)
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_indices_unordered_preserves_caller_order(
+    create_temporary_hdf5, mode: Literal["disk", "memory"]
+) -> None:
+    """Memory mode reads via h5py source_sel which requires monotonic indices internally;
+    the caller-facing contract still has to be: rows come back in the order requested."""
+    h5_path, data, _ = create_temporary_hdf5
+    indices = [12, 3, 7, 0, 9]
+    dataset = H5Dataset(mode, h5_path, select_indices=indices)
+
+    assert len(dataset) == len(indices)
+    for i, original in enumerate(indices):
+        sample, _, _ = dataset[i]
+        assert np.allclose(np.take(data, original, axis=0), sample)
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_indices_with_duplicates_replicates_rows(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
+    """Index-based selection is positional, not a set — repeated indices repeat the row."""
+    h5_path, data, _ = create_temporary_hdf5
+    indices = [4, 1, 4, 4, 2]
+    dataset = H5Dataset(mode, h5_path, select_indices=indices)
+
+    assert len(dataset) == len(indices)
+    for i, original in enumerate(indices):
+        sample, _, _ = dataset[i]
+        assert np.allclose(np.take(data, original, axis=0), sample)
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_indices_empty_yields_empty_dataset(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
+    h5_path, _, _ = create_temporary_hdf5
+    dataset = H5Dataset(mode, h5_path, select_indices=[])
+    assert len(dataset) == 0
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
@@ -191,19 +256,147 @@ def test_select_indices_exposes_meta_subset(create_temporary_hdf5_with_meta, mod
         assert meta.id == original_idx
 
 
-def test_h5_header_num_samples_mismatch_raises(data_shape, labels_shape, tmp_path) -> None:
+def test_h5_metadata_num_samples_mismatch_raises(data_shape, labels_shape, tmp_path) -> None:
     # Single mode only: the check runs in H5Dataset.__init__ before the disk/memory
     # branch in _build_store, so both modes execute the same code for this rule.
     path = tmp_path / "mismatch.h5"
     data = np.random.randn(*data_shape).astype(np.float16)
     labels = np.random.randn(*labels_shape).astype(np.float16)
-    header = DatasetMetadata(
+    metadata = DatasetMetadata(
         name="test",
         split="train",
         num_samples=data_shape[0] + 1,  # lie about the count
         origin_path="/origin",
     )
-    create_dataset_from_arrays(str(path), data=data, labels=labels, user_block=header)
+    create_dataset_from_arrays(str(path), data=data, labels=labels, user_block=metadata)
 
     with pytest.raises(DatasetNumSamplesMismatchError):
         H5Dataset("memory", str(path), ignore_user_block=False)
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_sample_meta_store_built_without_user_block(
+    create_temporary_hdf5_meta_no_user_block, mode: Literal["disk", "memory"]
+) -> None:
+    """A sample_meta_decoder alone is enough: no user block needed to enable the store."""
+    h5_path, _, _ = create_temporary_hdf5_meta_no_user_block
+    dataset = H5Dataset[SampleMeta](mode, h5_path, sample_meta_decoder=_decode_sample_meta)
+
+    assert dataset.metadata is None  # no header was written
+    _, _, meta = dataset[5]
+    assert isinstance(meta, SampleMeta)
+    assert meta.id == 5
+    assert list(dataset.get_all_sample_ids())[:3] == ["s0", "s1", "s2"]
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_sample_meta_store_built_when_user_block_is_ignored(
+    create_temporary_hdf5_with_meta, mode: Literal["disk", "memory"]
+) -> None:
+    """Header reading is orthogonal to store building: `ignore_user_block=True` must not gate the store."""
+    h5_path, _, _ = create_temporary_hdf5_with_meta
+    dataset = H5Dataset[SampleMeta](mode, h5_path, ignore_user_block=True, sample_meta_decoder=_decode_sample_meta)
+
+    assert dataset.metadata is None
+    _, _, meta = dataset[7]
+    assert isinstance(meta, SampleMeta)
+    assert meta.id == 7
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_sample_ids_exposes_subset(
+    create_temporary_hdf5_meta_no_user_block, mode: Literal["disk", "memory"]
+) -> None:
+    h5_path, data, labels = create_temporary_hdf5_meta_no_user_block
+    sample_ids = ["s3", "s10", "s42"]
+    dataset = H5Dataset[SampleMeta](
+        mode, h5_path, select_sample_ids=sample_ids, sample_meta_decoder=_decode_sample_meta
+    )
+
+    assert len(dataset) == len(sample_ids)
+    for i, sid in enumerate(sample_ids):
+        original_idx = int(sid[1:])
+        sample, label, meta = dataset[i]
+        assert np.allclose(np.take(data, original_idx, axis=0), sample)
+        assert np.allclose(np.take(labels, original_idx, axis=0), label)
+        assert isinstance(meta, SampleMeta)
+        assert meta.id == original_idx
+
+    # id view must track the caller-supplied order
+    assert list(dataset.get_all_sample_ids()) == sample_ids
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_sample_ids_preserves_caller_order(
+    create_temporary_hdf5_meta_no_user_block, mode: Literal["disk", "memory"]
+) -> None:
+    """Order is caller-defined and need not match the on-disk sample_ids order."""
+    h5_path, _, _ = create_temporary_hdf5_meta_no_user_block
+    sample_ids = ["s5", "s1", "s12", "s0"]
+    dataset = H5Dataset[SampleMeta](
+        mode, h5_path, select_sample_ids=sample_ids, sample_meta_decoder=_decode_sample_meta
+    )
+
+    assert len(dataset) == len(sample_ids)
+    assert [dataset[i][2].id for i in range(len(sample_ids))] == [5, 1, 12, 0]
+    assert list(dataset.get_all_sample_ids()) == sample_ids
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_sample_ids_raises_on_duplicates(
+    create_temporary_hdf5_meta_no_user_block, mode: Literal["disk", "memory"]
+) -> None:
+    """Duplicates in select_sample_ids are rejected — sample ids must uniquely identify samples."""
+    h5_path, _, _ = create_temporary_hdf5_meta_no_user_block
+    with pytest.raises(DuplicateSampleIdsError) as error:
+        H5Dataset(mode, h5_path, select_sample_ids=["s0", "s1", "s0", "s2", "s1"])
+    assert error.value.duplicate_ids == ["s0", "s1"]
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_sample_ids_works_without_decoder(
+    create_temporary_hdf5_meta_no_user_block, mode: Literal["disk", "memory"]
+) -> None:
+    """Id-based selection is orthogonal to the store: no decoder, no store, but selection still works."""
+    h5_path, data, _ = create_temporary_hdf5_meta_no_user_block
+    dataset = H5Dataset(mode, h5_path, select_sample_ids=["s2", "s8"])
+
+    assert len(dataset) == 2
+    assert np.allclose(np.take(data, 2, axis=0), dataset[0][0])
+    assert np.allclose(np.take(data, 8, axis=0), dataset[1][0])
+    assert dataset[0][2] is None  # no store → no meta
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_sample_ids_raises_on_unknown_id(
+    create_temporary_hdf5_meta_no_user_block, mode: Literal["disk", "memory"]
+) -> None:
+    h5_path, _, _ = create_temporary_hdf5_meta_no_user_block
+    with pytest.raises(UnknownSampleIdsError) as error:
+        H5Dataset(mode, h5_path, select_sample_ids=["s0", "does-not-exist", "also-missing"])
+    assert set(error.value.missing_ids) == {"does-not-exist", "also-missing"}
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_sample_ids_conflicts_with_select_indices(
+    create_temporary_hdf5_meta_no_user_block, mode: Literal["disk", "memory"]
+) -> None:
+    h5_path, _, _ = create_temporary_hdf5_meta_no_user_block
+    with pytest.raises(ConflictingSelectorsError):
+        H5Dataset(mode, h5_path, select_indices=[0], select_sample_ids=["s0"])
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_select_sample_ids_requires_ids_dataset(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
+    """Id-based selection needs the sample_ids dataset; error surfaces clearly when it's missing."""
+    h5_path, _, _ = create_temporary_hdf5
+    with pytest.raises(H5DatasetMissingKeyError):
+        H5Dataset(mode, h5_path, select_sample_ids=["anything"])
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_decoder_without_ids_dataset_raises(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
+    """Providing a decoder is a request to build the store; missing ids/meta datasets is a clear error."""
+    h5_path, _, _ = create_temporary_hdf5
+    with pytest.raises(H5DatasetMissingKeyError):
+        H5Dataset[SampleMeta](mode, h5_path, sample_meta_decoder=_decode_sample_meta)

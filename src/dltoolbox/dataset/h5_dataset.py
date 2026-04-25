@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from typing import Any, Literal, Union
 
@@ -6,7 +8,14 @@ import numpy as np
 from torch import Tensor
 from torch.utils.data import Dataset, default_collate
 
-from dltoolbox.dataset.errors import DatasetNumSamplesMismatchError, SampleMetaStoreUnavailableError
+from dltoolbox.dataset._utils import read_ids, require_key
+from dltoolbox.dataset.errors import (
+    ConflictingSelectorsError,
+    DatasetNumSamplesMismatchError,
+    DuplicateSampleIdsError,
+    SampleMetaStoreUnavailableError,
+    UnknownSampleIdsError,
+)
 from dltoolbox.dataset.h5_dataset_disk import H5DatasetDisk
 from dltoolbox.dataset.h5_dataset_memory import H5DatasetMemory
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
@@ -31,6 +40,7 @@ class H5Dataset[T](Dataset):
         h5_sample_ids_key: str = "metadata/sample_ids",
         h5_sample_meta_key: str = "metadata/sample_meta",
         select_indices: Sequence[int] | None = None,
+        select_sample_ids: Sequence[str] | None = None,
         static_label: Union[np.ndarray, Tensor, None] = None,
         data_row_dim: int = 0,
         label_row_dim: int = 0,
@@ -40,6 +50,17 @@ class H5Dataset[T](Dataset):
         sample_meta_decoder: SampleMetaDecoder[T] | None = None,
         sample_meta_store_mode: Literal["lazy", "eager", "auto"] = "auto",
     ) -> None:
+        if select_indices is not None and select_sample_ids is not None:
+            raise ConflictingSelectorsError()
+
+        # translate id-based selection to positional indices by reading the sample_ids
+        # dataset once; preserves caller-supplied order and validates that every
+        # requested id exists and is unique before any instance is built
+        if select_sample_ids is not None:
+            select_indices = self._resolve_sample_ids_to_indices(
+                h5_path=h5_path, h5_sample_ids_key=h5_sample_ids_key, sample_ids=select_sample_ids
+            )
+
         if mode == "disk":
             self._instance = H5DatasetDisk(
                 h5_path=h5_path,
@@ -73,6 +94,11 @@ class H5Dataset[T](Dataset):
         self._header = None
         self._store = None
 
+        # header (user-block) and sample-meta store are independent concerns:
+        # * the header describes the file
+        # * the store exposes per-sample payloads
+        # build each if the corresponding inputs are present
+
         if not ignore_user_block and self._instance.ub_bytes is not None:
             self._header = DatasetMetadata.from_json_bytes(self._instance.ub_bytes.rstrip(b"\x00"))
 
@@ -82,39 +108,71 @@ class H5Dataset[T](Dataset):
             if self._header.num_samples != actual_num_samples:
                 raise DatasetNumSamplesMismatchError(self._header.num_samples, actual_num_samples)
 
-            if sample_meta_decoder is not None:
-                if sample_meta_store_mode == "auto":
-                    store_mode = "lazy" if mode == "disk" else "eager"
-                else:
-                    store_mode = sample_meta_store_mode
+        if sample_meta_decoder is not None:
+            if sample_meta_store_mode == "auto":
+                store_mode = "lazy" if mode == "disk" else "eager"
+            else:
+                store_mode = sample_meta_store_mode
 
-                self._store = self._build_store(
-                    h5_path=h5_path,
-                    store_mode=store_mode,  # type: ignore
-                    header=self._header,
-                    h5_sample_ids_key=h5_sample_ids_key,
-                    h5_sample_meta_key=h5_sample_meta_key,
-                    select_indices=select_indices,
-                    sample_meta_decoder=sample_meta_decoder,
-                )
+            self._store = self._build_store(
+                h5_path=h5_path,
+                store_mode=store_mode,  # type: ignore
+                dataset_metadata=self._header,
+                h5_sample_ids_key=h5_sample_ids_key,
+                h5_sample_meta_key=h5_sample_meta_key,
+                select_indices=select_indices,
+                sample_meta_decoder=sample_meta_decoder,
+            )
+
+    @staticmethod
+    def _resolve_sample_ids_to_indices(*, h5_path: str, h5_sample_ids_key: str, sample_ids: Sequence[str]) -> list[int]:
+        seen: set[str] = set()
+        duplicates: list[str] = []
+        for sid in sample_ids:
+            if sid in seen:
+                duplicates.append(sid)
+            else:
+                seen.add(sid)
+        if duplicates:
+            raise DuplicateSampleIdsError(duplicates)
+
+        with h5py.File(h5_path, "r") as f:
+            require_key(f, h5_sample_ids_key)
+            all_ids = read_ids(f[h5_sample_ids_key])
+
+        id_to_index = {sid: i for i, sid in enumerate(all_ids)}
+        resolved: list[int] = []
+        missing: list[str] = []
+        for sid in sample_ids:
+            idx = id_to_index.get(sid)
+            if idx is None:
+                missing.append(sid)
+            else:
+                resolved.append(idx)
+        if missing:
+            raise UnknownSampleIdsError(missing)
+        return resolved
 
     def _build_store(
         self,
         *,
         h5_path: str,
         store_mode: Literal["lazy", "eager"],
-        header: DatasetMetadata,
+        dataset_metadata: DatasetMetadata | None,
         h5_sample_ids_key: str,
         h5_sample_meta_key: str,
         select_indices: Sequence[int] | None,
         sample_meta_decoder: SampleMetaDecoder[T],
     ) -> ISampleMetaStore[T]:
-        # bind the header once so objects implementing ResolvableSampleMeta are resolved
-        # automatically; non-resolvable payloads pass through unchanged
-        decoder = with_resolve(sample_meta_decoder, header)
+        # skip resolution wrapping when no dataset metadata is available
+        decoder = (
+            with_resolve(sample_meta_decoder, dataset_metadata) if dataset_metadata is not None else sample_meta_decoder
+        )
         if store_mode == "lazy":
             # share the already-open file handle from the disk instance
             f = self._instance.h5_file
+            require_key(f, h5_sample_ids_key)
+            require_key(f, h5_sample_meta_key)
             return LazySampleMetaStore(
                 sample_ids_ds=f[h5_sample_ids_key],
                 sample_meta_ds=f[h5_sample_meta_key],
@@ -125,6 +183,8 @@ class H5Dataset[T](Dataset):
             raise ValueError(f'unknown mode "{store_mode}" for sample meta store')
         # memory mode: open briefly to eagerly decode into RAM, then drop the handle
         with h5py.File(h5_path, "r") as f:
+            require_key(f, h5_sample_ids_key)
+            require_key(f, h5_sample_meta_key)
             return EagerSampleMetaStore(
                 sample_ids_ds=f[h5_sample_ids_key],
                 sample_meta_ds=f[h5_sample_meta_key],

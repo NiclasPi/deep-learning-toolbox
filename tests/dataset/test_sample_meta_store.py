@@ -5,8 +5,8 @@ from dataclasses import asdict, dataclass, replace
 import h5py
 import pytest
 
+from dltoolbox.dataset._utils import read_ids
 from dltoolbox.dataset.errors import SampleMetaLengthMismatchError
-from dltoolbox.dataset.metadata._utils import read_ids
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.metadata.eager_sample_meta_store import EagerSampleMetaStore
 from dltoolbox.dataset.metadata.isample_meta_store import ISampleMetaStore

@@ -5,7 +5,8 @@ import numpy as np
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from dltoolbox.dataset.errors import H5DatasetMissingKeyError, H5DatasetShapeMismatchError
+from dltoolbox.dataset._utils import require_key
+from dltoolbox.dataset.errors import H5DatasetShapeMismatchError
 from dltoolbox.transforms import Transformer
 
 
@@ -45,11 +46,9 @@ class H5DatasetDisk(Dataset):
                 self._ub_bytes = h5_file.read(self._ub_size)
 
         self.h5_file = h5py.File(h5_path, "r")
-        if h5_data_key not in self.h5_file:
-            raise H5DatasetMissingKeyError(h5_data_key)
+        require_key(self.h5_file, h5_data_key)
         if self.static_label is None:
-            if h5_label_key not in self.h5_file:
-                raise H5DatasetMissingKeyError(h5_label_key)
+            require_key(self.h5_file, h5_label_key)
             if self.h5_file[h5_data_key].shape[data_row_dim] != self.h5_file[h5_label_key].shape[label_row_dim]:
                 raise H5DatasetShapeMismatchError(
                     self.h5_file[h5_data_key].shape[data_row_dim], self.h5_file[h5_label_key].shape[label_row_dim]
