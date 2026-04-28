@@ -121,6 +121,17 @@ class TestWelfordSnapshot:
         _ = est_a + est_b.snapshot()
         assert est_a.snapshot() == snap_before
 
+    def test_merge_is_atomic_incompatible_snap_in_batch_leaves_state_unchanged(self) -> None:
+        dataset = torch.rand(50, 3)
+        est = _make_estimator(dataset, (0,))
+        snap_compatible = _make_estimator(dataset, (0,)).snapshot()
+        snap_incompatible = _make_estimator(dataset, None).snapshot()
+
+        snap_before = est.snapshot()
+        with pytest.raises(ValueError):
+            est.merge(snap_compatible, snap_incompatible)
+        assert est.snapshot() == snap_before
+
     def test_merge_rejects_snapshot_with_different_reduction_dim_without_corrupting_state(self) -> None:
         dataset = torch.rand(50, 3)
         est = _make_estimator(dataset, (0,))

@@ -143,9 +143,9 @@ class WelfordEstimator:
     def _load_snapshot(self, snap: WelfordSnapshot) -> None:
         self._dim = snap.dim
         self._permute = snap.permute
-        self._count = snap.count.detach().clone().to(dtype=torch.float64)
-        self._mean = snap.mean.detach().clone().to(dtype=torch.float64)
-        self._m2 = snap.m2.detach().clone().to(dtype=torch.float64)
+        self._count = snap.count.clone().to(dtype=torch.float64)
+        self._mean = snap.mean.clone().to(dtype=torch.float64)
+        self._m2 = snap.m2.clone().to(dtype=torch.float64)
         self._initialized = True
 
     def _align_device_dtype(self, *tensors: torch.Tensor) -> tuple[torch.Tensor, ...]:
@@ -195,28 +195,41 @@ class WelfordEstimator:
         uninitialized, state is copied from the first non-empty snapshot.
         Snapshot tensors are moved to this estimator's device before merging.
 
+        All compatibility checks run before any state is mutated, so a
+        ValueError leaves self unchanged.
+
         Args:
             *snaps (WelfordSnapshot): Snapshots to merge.
 
         Raises:
             ValueError: If any snapshot is incompatible with the current state.
         """
-        for snap in snaps:
-            if snap.count.item() == 0:
-                continue
-            if self._empty():
-                if self._initialized:
-                    self._check_compatible(snap)
-                self._load_snapshot(snap)
-            else:
+        non_empty = [s for s in snaps if s.count.item() != 0]
+        if not non_empty:
+            return
+
+        if self._empty():
+            # No accumulated data yet: validate mutual compatibility using the first
+            # snapshot as reference, copy it into self, then Chan-merge the rest.
+            ref = WelfordEstimator.from_snapshot(non_empty[0])
+            for snap in non_empty[1:]:
+                ref._check_compatible(snap)
+            del ref
+            self._load_snapshot(non_empty[0])
+            non_empty = non_empty[1:]
+        else:
+            # Self has data: validate all snapshots against the current state.
+            for snap in non_empty:
                 self._check_compatible(snap)
-                count_b, mean_b, m2_b = self._align_device_dtype(snap.count, snap.mean, snap.m2)
-                count_a = self._count.clone()
-                n = count_a + count_b
-                delta = mean_b - self._mean
-                self._mean = self._mean + delta * count_b / n
-                self._m2 = self._m2 + m2_b + delta**2 * count_a * count_b / n
-                self._count = n
+
+        for snap in non_empty:
+            count_b, mean_b, m2_b = self._align_device_dtype(snap.count, snap.mean, snap.m2)
+            count_a = self._count.clone()
+            n = count_a + count_b
+            delta = mean_b - self._mean
+            self._mean = self._mean + delta * count_b / n
+            self._m2 = self._m2 + m2_b + delta**2 * count_a * count_b / n
+            self._count = n
 
     def __add__(self, other: WelfordSnapshot) -> WelfordEstimator:
         """Return a new estimator with other merged in, leaving self unchanged."""
