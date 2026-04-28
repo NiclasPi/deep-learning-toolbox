@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Union
 
 import numpy as np
 import torch
@@ -12,7 +12,7 @@ import torch
 class Normalization:
     mean: Union[float, np.ndarray, torch.Tensor]
     std: Union[float, np.ndarray, torch.Tensor]
-    perm: Optional[Tuple[int, ...]] = None
+    perm: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True, eq=False)
@@ -43,8 +43,8 @@ class WelfordSnapshot:
     count: torch.Tensor
     mean: torch.Tensor
     m2: torch.Tensor
-    dim: Optional[Tuple[int, ...]]
-    permute: Optional[Tuple[int, ...]]
+    dim: tuple[int, ...] | None
+    permute: tuple[int, ...] | None
 
     @classmethod
     def from_state_dict(cls, state_dict: dict[str, Any]) -> WelfordSnapshot:
@@ -100,10 +100,10 @@ class WelfordEstimator:
     _mean: torch.Tensor
     _m2: torch.Tensor
 
-    def __init__(self, dim: Optional[Tuple[int, ...]] = None):
+    def __init__(self, dim: tuple[int, ...] | None = None):
         self._initialized = False
         self._dim = dim
-        self._permute: Optional[Tuple[int, ...]] = None
+        self._permute: tuple[int, ...] | None = None
 
     def _try_initialize(self, shape: torch.Size, device: torch.device) -> None:
         if not self._initialized:
@@ -148,7 +148,7 @@ class WelfordEstimator:
         self._m2 = snap.m2.detach().clone().to(dtype=torch.float64)
         self._initialized = True
 
-    def _align_device_dtype(self, *tensors: torch.Tensor) -> Tuple[torch.Tensor, ...]:
+    def _align_device_dtype(self, *tensors: torch.Tensor) -> tuple[torch.Tensor, ...]:
         """Move tensors to self's device and cast to float64."""
         return tuple(t.to(device=self._mean.device, dtype=torch.float64) for t in tensors)
 
@@ -250,7 +250,7 @@ class WelfordEstimator:
     @torch.no_grad()
     def finalize(
         self, dtype: torch.dtype = torch.float64, device: torch.device = None
-    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[Tuple[int, ...]]]:
+    ) -> tuple[torch.Tensor, torch.Tensor, tuple[int, ...] | None]:
         """
         Return the mean and standard deviation tensors.
 
