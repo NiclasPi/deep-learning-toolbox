@@ -47,24 +47,20 @@ class H5DatasetDisk(Dataset):
 
         self.h5_file = h5py.File(h5_path, "r")
         require_key(self.h5_file, h5_data_key)
+        self._data_ds = self.h5_file[h5_data_key]
         if self.static_label is None:
             require_key(self.h5_file, h5_label_key)
-            if self.h5_file[h5_data_key].shape[data_row_dim] != self.h5_file[h5_label_key].shape[label_row_dim]:
+            self._label_ds = self.h5_file[h5_label_key]
+            if self._data_ds.shape[data_row_dim] != self._label_ds.shape[label_row_dim]:
                 raise H5DatasetShapeMismatchError(
-                    self.h5_file[h5_data_key].shape[data_row_dim], self.h5_file[h5_label_key].shape[label_row_dim]
+                    self._data_ds.shape[data_row_dim], self._label_ds.shape[label_row_dim]
                 )
 
         self.h5_data_len: int
         if select_indices is not None:
             self.h5_data_len = len(select_indices)
         else:
-            self.h5_data_len = self.h5_file[h5_data_key].shape[data_row_dim]
-
-    def _data(self) -> h5py.Dataset:
-        return self.h5_file[self.h5_data_key]
-
-    def _labels(self) -> h5py.Dataset:
-        return self.h5_file[self.h5_label_key]
+            self.h5_data_len = self._data_ds.shape[data_row_dim]
 
     @staticmethod
     def _h5_take(dataset: h5py.Dataset, index: int, axis: int) -> np.ndarray:
@@ -86,11 +82,11 @@ class H5DatasetDisk(Dataset):
         if self.selected_indices is not None:
             index = self.selected_indices[index]
 
-        data = self._h5_take(self._data(), index, axis=self.data_row_dim)
+        data = self._h5_take(self._data_ds, index, axis=self.data_row_dim)
         label = (
             self.static_label
             if self.static_label is not None
-            else self._h5_take(self._labels(), index, axis=self.label_row_dim)
+            else self._h5_take(self._label_ds, index, axis=self.label_row_dim)
         )
 
         if self.data_transform is not None:
