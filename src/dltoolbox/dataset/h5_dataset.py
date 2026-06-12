@@ -13,6 +13,7 @@ from dltoolbox.dataset.errors import (
     ConflictingSelectorsError,
     DatasetNumSamplesMismatchError,
     DuplicateSampleIdsError,
+    DuplicateSelectIndicesError,
     SampleMetaStoreUnavailableError,
     UnknownSampleIdsError,
 )
@@ -94,6 +95,18 @@ class H5Dataset[T](Dataset):
         """
         if select_indices is not None and select_sample_ids is not None:
             raise ConflictingSelectorsError()
+
+        # reject duplicate positional indices
+        if select_indices is not None:
+            seen: set[int] = set()
+            duplicates: list[int] = []
+            for idx in select_indices:
+                if idx in seen:
+                    duplicates.append(idx)
+                else:
+                    seen.add(idx)
+            if duplicates:
+                raise DuplicateSelectIndicesError(duplicates)
 
         # translate id-based selection to positional indices by reading the sample_ids
         # dataset once; preserves caller-supplied order and validates that every

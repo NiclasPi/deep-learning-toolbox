@@ -13,6 +13,7 @@ from dltoolbox.dataset.errors import (
     ConflictingSelectorsError,
     DatasetNumSamplesMismatchError,
     DuplicateSampleIdsError,
+    DuplicateSelectIndicesError,
     H5DatasetMissingKeyError,
     UnknownSampleIdsError,
 )
@@ -161,16 +162,12 @@ def test_select_indices_unordered_preserves_caller_order(
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])
-def test_select_indices_with_duplicates_replicates_rows(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
-    """Index-based selection is positional, not a set — repeated indices repeat the row."""
-    h5_path, data, _ = create_temporary_hdf5
-    indices = [4, 1, 4, 4, 2]
-    dataset = H5Dataset(mode, h5_path, select_indices=indices)
-
-    assert len(dataset) == len(indices)
-    for i, original in enumerate(indices):
-        sample, _, _ = dataset[i]
-        assert np.allclose(np.take(data, original, axis=0), sample)
+def test_select_indices_with_duplicates_raises(create_temporary_hdf5, mode: Literal["disk", "memory"]) -> None:
+    """Duplicate positional indices are rejected rather than silently replicating rows."""
+    h5_path, _, _ = create_temporary_hdf5
+    with pytest.raises(DuplicateSelectIndicesError) as error:
+        H5Dataset(mode, h5_path, select_indices=[4, 1, 4, 4, 2])
+    assert error.value.duplicate_indices == [4, 4]
 
 
 @pytest.mark.parametrize("mode", ["disk", "memory"])

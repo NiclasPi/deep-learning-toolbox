@@ -3,6 +3,7 @@ import logging
 import traceback
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import replace
 from multiprocessing import Manager, Queue
 from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
@@ -12,7 +13,12 @@ from uuid import uuid4
 import h5py
 import numpy as np
 
-from dltoolbox.dataset.errors import BatchProcessItemError, SampleMetaPairingError, SampleSequenceLengthMismatchError
+from dltoolbox.dataset.errors import (
+    BatchProcessItemError,
+    SampleCountMismatchError,
+    SampleMetaPairingError,
+    SampleSequenceLengthMismatchError,
+)
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaEncoder
 from dltoolbox.multiprocess import get_multiprocess_config
@@ -378,6 +384,16 @@ def create_dataset_from_paths(
 
             # resize the dataset to its actual size
             dataset.resize(index, axis=0)
+
+            # the data length, the per-sample order list, and the header's num_samples must all agree
+            if len(original_indices_in_order) != index:
+                raise SampleCountMismatchError(index, len(original_indices_in_order))
+
+            # loader failures shrink the dataset, so a DatasetMetadata header still claiming the
+            # original count would fail num_samples validation at load; rewrite it to the count
+            # actually written, which is also what the sample_ids/sample_meta datasets carry.
+            if isinstance(user_block, DatasetMetadata) and user_block.num_samples != index:
+                ub_bytes = replace(user_block, num_samples=index).to_json_bytes()
 
             # write per-sample aligned inputs, reordered to match the on-disk sample order
             if labels is not None:

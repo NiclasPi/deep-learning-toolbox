@@ -86,6 +86,32 @@ class DuplicateSampleIdsError(ValueError):
         super().__init__(f"select_sample_ids contains duplicates: [{preview}]{suffix}")
 
 
+class DuplicateSelectIndicesError(ValueError):
+    """Raised when ``select_indices`` contains the same index more than once."""
+
+    def __init__(self, duplicate_indices: Sequence[int]) -> None:
+        self.duplicate_indices: list[int] = list(duplicate_indices)
+        preview = ", ".join(repr(i) for i in self.duplicate_indices[:5])
+        suffix = f" (and {len(self.duplicate_indices) - 5} more)" if len(self.duplicate_indices) > 5 else ""
+        super().__init__(f"select_indices contains duplicates: [{preview}]{suffix}")
+
+
+class SampleCountMismatchError(RuntimeError):
+    """Raised when the written data length and the recorded per-sample order list disagree.
+
+    Indicates an internal accounting bug during dataset creation: the number of samples
+    written to the data dataset does not match the number of per-sample entries tracked for
+    labels/ids/meta, which would otherwise produce an inconsistent file.
+    """
+
+    def __init__(self, data_length: int, order_length: int) -> None:
+        self.data_length = data_length
+        self.order_length = order_length
+        super().__init__(
+            f"written data length does not match recorded sample order length: {data_length} vs {order_length}"
+        )
+
+
 class SampleSequenceLengthMismatchError(ValueError):
     """Raised when two per-sample sequences that must be index-matched have different lengths."""
 
