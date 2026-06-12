@@ -46,10 +46,52 @@ class H5Dataset[T](Dataset):
         label_row_dim: int = 0,
         data_transform: Transformer | None = None,
         label_transform: Transformer | None = None,
+        cache_chunks: int | None = None,
+        rdcc_override: dict[str, int | float] | None = None,
         ignore_user_block: bool = True,
         sample_meta_decoder: SampleMetaDecoder[T] | None = None,
         sample_meta_store_mode: Literal["lazy", "eager", "auto"] = "auto",
     ) -> None:
+        """Open an HDF5-backed dataset, dispatching to a disk- or memory-resident backend.
+
+        Args:
+            mode: ``"disk"`` keeps the file open and reads each sample on indexing; ``"memory"`` reads the whole
+                (or selected) dataset into RAM up front and closes the file.
+            h5_path: path to the HDF5 file.
+            h5_data_key: key of the data dataset.
+            h5_label_key: key of the label dataset; ignored when ``static_label`` is set.
+            h5_sample_ids_key: key of the per-sample id dataset, used to resolve ``select_sample_ids`` and to back
+                the sample-meta store.
+            h5_sample_meta_key: key of the per-sample metadata dataset backing the store.
+            select_indices: positional row indices to expose, in caller order; mutually exclusive with
+                ``select_sample_ids``. ``None`` exposes every row.
+            select_sample_ids: sample ids to expose, in caller order; resolved to positional indices via
+                ``h5_sample_ids_key``. Mutually exclusive with ``select_indices``.
+            static_label: a single label returned for every sample; when given, no label dataset is read.
+            data_row_dim: axis of the data dataset indexed as the sample (row) dimension.
+            label_row_dim: axis of the label dataset indexed as the sample (row) dimension.
+            data_transform: transform applied to each data sample before it is returned.
+            label_transform: transform applied to each label before it is returned.
+            cache_chunks: number of chunks the HDF5 raw-data chunk cache should hold for the data dataset. Sizes
+                ``rdcc_nbytes`` to exactly that many chunks and derives a prime ``rdcc_nslots`` (~100x the chunk
+                count, never below the linked HDF5's default). ``None`` leaves the h5py defaults in place; must be
+                positive otherwise. Ignored for contiguous (unchunked) datasets.
+            rdcc_override: raw ``rdcc_*`` keyword arguments (``rdcc_nbytes``, ``rdcc_nslots``, ``rdcc_w0``) passed
+                straight to ``h5py.File``. Takes precedence over ``cache_chunks`` — an escape hatch for tuning the
+                cache by hand.
+            ignore_user_block: when ``False``, parse the file's user block as dataset metadata and validate its
+                sample count against the data dataset.
+            sample_meta_decoder: decoder that turns raw per-sample metadata into ``T``; when given, a sample-meta
+                store is built and exposed via ``__getitem__``.
+            sample_meta_store_mode: ``"lazy"`` reads metadata on access, ``"eager"`` decodes it all into RAM,
+                ``"auto"`` picks lazy for disk mode and eager for memory mode.
+
+        Note:
+            Chunk-cache settings (``cache_chunks`` / ``rdcc_override``) take effect only on the first open of a
+            given file within the process. HDF5 shares one handle per file path, so a second ``H5Dataset`` over the
+            same ``h5_path`` while the first is still open (e.g. train/val splits via ``select_indices`` in
+            ``"disk"`` mode) silently reuses the first open's cache settings and ignores its own.
+        """
         if select_indices is not None and select_sample_ids is not None:
             raise ConflictingSelectorsError()
 
@@ -72,6 +114,8 @@ class H5Dataset[T](Dataset):
                 label_row_dim=label_row_dim,
                 data_transform=data_transform,
                 label_transform=label_transform,
+                cache_chunks=cache_chunks,
+                rdcc_override=rdcc_override,
             )
         elif mode == "memory":
             self._instance = H5DatasetMemory(
@@ -84,6 +128,8 @@ class H5Dataset[T](Dataset):
                 label_row_dim=label_row_dim,
                 data_transform=data_transform,
                 label_transform=label_transform,
+                cache_chunks=cache_chunks,
+                rdcc_override=rdcc_override,
             )
         else:
             raise ValueError(f'unknown mode "{mode}"')

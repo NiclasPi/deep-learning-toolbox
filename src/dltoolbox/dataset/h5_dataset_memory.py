@@ -5,7 +5,7 @@ import numpy as np
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from dltoolbox.dataset._utils import require_key
+from dltoolbox.dataset._utils import derive_rdcc_args, require_key
 from dltoolbox.dataset.errors import H5DatasetShapeMismatchError
 from dltoolbox.transforms import Transformer
 
@@ -27,6 +27,8 @@ class H5DatasetMemory(Dataset):
         label_row_dim: int = 0,
         data_transform: Optional[Transformer] = None,
         label_transform: Optional[Transformer] = None,
+        cache_chunks: Optional[int] = None,
+        rdcc_override: Optional[dict[str, int | float]] = None,
     ) -> None:
         self.static_label = static_label
         self.data_row_dim: int = data_row_dim
@@ -34,19 +36,21 @@ class H5DatasetMemory(Dataset):
         self.data_transform = data_transform
         self.label_transform = label_transform
 
+        # check for user block in HDF5 file and derive the raw data chunk cache args
         self._ub_size: int = 0
         self._ub_bytes: Optional[bytes] = None
-        # check for user block in HDF5 file
+        rdcc_args: dict[str, int | float] = {}
         with h5py.File(h5_path, "r") as h5_file:
             self._ub_size = h5_file.userblock_size
+            require_key(h5_file, h5_data_key)
+            rdcc_args = derive_rdcc_args(h5_file[h5_data_key], cache_chunks, rdcc_override)
 
         # read user block if available
         if self._ub_size > 0:
             with open(h5_path, "br") as h5_file:
                 self._ub_bytes = h5_file.read(self._ub_size)
 
-        with h5py.File(h5_path, "r") as h5_file:
-            require_key(h5_file, h5_data_key)
+        with h5py.File(h5_path, "r", **rdcc_args) as h5_file:
             if self.static_label is None:
                 require_key(h5_file, h5_label_key)
                 if h5_file[h5_data_key].shape[data_row_dim] != h5_file[h5_label_key].shape[label_row_dim]:

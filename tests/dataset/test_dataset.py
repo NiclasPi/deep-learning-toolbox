@@ -2,6 +2,7 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Literal
 
+import h5py
 import numpy as np
 import pytest
 import torch
@@ -400,3 +401,66 @@ def test_decoder_without_ids_dataset_raises(create_temporary_hdf5, mode: Literal
     h5_path, _, _ = create_temporary_hdf5
     with pytest.raises(H5DatasetMissingKeyError):
         H5Dataset[SampleMeta](mode, h5_path, sample_meta_decoder=_decode_sample_meta)
+
+
+def _chunk_cache(h5_file: h5py.File) -> tuple[int, int, float]:
+    """(rdcc_nslots, rdcc_nbytes, rdcc_w0) actually in force on an open HDF5 file.
+
+    get_cache() returns (mdc_nelmts, rdcc_nslots, rdcc_nbytes, rdcc_w0); we drop the
+    metadata-cache count and read the raw-data chunk-cache fields through one accessor so
+    every call site indexes them identically.
+    """
+    _, nslots, nbytes, w0 = h5_file.id.get_access_plist().get_cache()
+    return nslots, nbytes, w0
+
+
+@pytest.fixture(scope="module")
+def create_temporary_hdf5_chunked(tmp_path_factory, data_shape, labels_shape) -> tuple[str, int]:
+    """Chunked along the sample axis so the raw-data chunk cache is actually engaged."""
+    path = tmp_path_factory.mktemp("h5_chunked") / "data.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    labels = np.random.randn(*labels_shape).astype(np.float16)
+    chunk_length = 8
+    create_dataset_from_arrays(str(path), data=data, labels=labels, h5_chunk_length=chunk_length)
+    chunk_nbytes = chunk_length * int(np.prod(data_shape[1:])) * data.dtype.itemsize
+    return str(path), chunk_nbytes
+
+
+def test_cache_chunks_configures_chunk_cache(create_temporary_hdf5_chunked) -> None:
+    h5_path, chunk_nbytes = create_temporary_hdf5_chunked
+    dataset = H5Dataset("disk", h5_path, cache_chunks=4)
+
+    nslots, nbytes, _ = _chunk_cache(dataset.h5_file)
+    # the derived settings are the ones HDF5 is actually using, not just a computed dict
+    assert nbytes == 4 * chunk_nbytes
+    assert nslots >= 100 * 4
+
+
+def test_rdcc_override_configures_chunk_cache(create_temporary_hdf5_chunked) -> None:
+    h5_path, _ = create_temporary_hdf5_chunked
+    override = {"rdcc_nbytes": 1 << 20, "rdcc_nslots": 1009, "rdcc_w0": 0.3}
+    dataset = H5Dataset("disk", h5_path, cache_chunks=4, rdcc_override=override)
+
+    nslots, nbytes, w0 = _chunk_cache(dataset.h5_file)
+    assert (nslots, nbytes, w0) == (1009, 1 << 20, pytest.approx(0.3))
+
+
+def test_cache_chunks_none_leaves_h5py_defaults(create_temporary_hdf5_chunked) -> None:
+    h5_path, _ = create_temporary_hdf5_chunked
+    # h5py's default cache, read from an independent in-memory file so no handle is shared
+    # with h5_path (HDF5 reuses one handle per path and would otherwise leak our settings)
+    with h5py.File.in_memory() as f:
+        _, default_nbytes, _ = _chunk_cache(f)
+
+    _, nbytes, _ = _chunk_cache(H5Dataset("disk", h5_path).h5_file)
+    assert nbytes == default_nbytes
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+@pytest.mark.parametrize("bad", [0, -1])
+def test_invalid_cache_chunks_raises_through_public_api(
+    create_temporary_hdf5_chunked, mode: Literal["disk", "memory"], bad: int
+) -> None:
+    h5_path, _ = create_temporary_hdf5_chunked
+    with pytest.raises(ValueError):
+        H5Dataset(mode, h5_path, cache_chunks=bad)
