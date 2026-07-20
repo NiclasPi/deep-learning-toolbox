@@ -3,6 +3,7 @@ from typing import Tuple, Union
 import numpy as np
 import pytest
 import torch
+from torch.utils.data import DataLoader, Dataset
 
 import dltoolbox.transforms as tfs
 from tests.utils import transform_create_input
@@ -30,6 +31,63 @@ class TestTransforms:
         assert tf1.is_train_mode()
         assert tf2.is_train_mode()
         assert nest.is_train_mode()
+
+    def test_transform_mutation_visible_to_dataloader_workers(self) -> None:
+        """A Compose shared by reference with worker processes must reflect in-place slot swaps.
+
+        DataLoader workers are (re-)forked from the main process on every fresh iteration, so a
+        transform swapped into a shared Compose before that iteration must be visible to the
+        workers, not just to the main process.
+        """
+
+        class MarkerDataset(Dataset):
+            def __init__(self, data_transform: tfs.Compose):
+                self.data_transform = data_transform
+
+            def __len__(self) -> int:
+                return 4
+
+            def __getitem__(self, index: int) -> str:
+                return type(self.data_transform[1]).__name__
+
+        compose = tfs.Compose([tfs.NoTransform(), tfs.NoTransform()])
+        dataset = MarkerDataset(compose)
+        loader = DataLoader(dataset, batch_size=4, num_workers=2)
+
+        assert set(next(iter(loader))) == {"NoTransform"}
+
+        compose[1] = tfs.ToTensor()
+
+        observed = set(next(iter(loader)))
+        assert observed == {"ToTensor"}, f"worker(s) did not see the mutated transform slot, saw {observed}"
+
+    def test_transform_mode_visible_to_dataloader_workers(self) -> None:
+        """A transform's train/eval mode toggled by reference must propagate to worker processes."""
+
+        class ModeAwareTransform(tfs.TransformerWithMode):
+            def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+                return x
+
+        class ModeMarkerDataset(Dataset):
+            def __init__(self, transform: tfs.TransformerWithMode):
+                self.transform = transform
+
+            def __len__(self) -> int:
+                return 4
+
+            def __getitem__(self, index: int) -> bool:
+                return self.transform.is_eval_mode()
+
+        transform = ModeAwareTransform()
+        dataset = ModeMarkerDataset(transform)
+        loader = DataLoader(dataset, batch_size=4, num_workers=2)
+
+        assert set(next(iter(loader)).tolist()) == {False}
+
+        transform.set_eval_mode()
+
+        observed = set(next(iter(loader)).tolist())
+        assert observed == {True}, f"worker(s) did not see the mode change, saw {observed}"
 
     def test_dict_create(self) -> None:
         x = transform_create_input(backend="numpy", shape=(10, 10))
