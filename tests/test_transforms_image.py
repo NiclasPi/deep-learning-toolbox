@@ -1,4 +1,4 @@
-from typing import Literal, Tuple, Union
+from typing import Literal, Tuple
 
 import numpy as np
 import pytest
@@ -9,26 +9,6 @@ from tests.utils import transform_create_input, transform_set_mode
 
 
 class TestTransformsImage:
-    @pytest.mark.parametrize("mode", ["train", "eval"])
-    @pytest.mark.parametrize("backend", ["numpy", "torch"])
-    @pytest.mark.parametrize("shape", [(32, 32), (3, 32, 32)])
-    @pytest.mark.parametrize("size", [16, (16, 16), 31, (31, 13)])
-    def test_random_crop(
-        self,
-        mode: Literal["train", "eval"],
-        backend: Literal["numpy", "torch"],
-        shape: Tuple[int, ...],
-        size: Union[int, Tuple[int, int]],
-    ) -> None:
-        tf = tfs.RandomCrop(size=size)
-        transform_set_mode(tf, mode)
-
-        x = transform_create_input(backend, shape)
-        y = tf(x)
-
-        assert y.shape[-1] == (size if isinstance(size, int) else size[-1])
-        assert y.shape[-2] == (size if isinstance(size, int) else size[-2])
-
     @pytest.mark.parametrize("mode", ["train", "eval"])
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     @pytest.mark.parametrize("dim", [(0,), (-1,), (0, 1)])
@@ -88,3 +68,87 @@ class TestTransformsImage:
             assert y_uint8.dtype == torch.uint8
             # check if no overflows occurred (for scale=1.0)
             assert not torch.any(torch.abs(x_uint8.to(torch.int16) - y_uint8.to(torch.int16)) > 1)
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("scale", [0.25, 0.5, 1.0, 2.0])
+    def test_resolution_downgrade(self, backend: Literal["numpy", "torch"], scale: float) -> None:
+        tf = tfs.ResizeRoundTrip(dim=(0, 1), scale=scale)
+
+        x = transform_create_input(backend, (16, 16))
+        y = tf(x)
+
+        assert x.shape == y.shape
+        if scale == 1.0:
+            # a round trip at scale 1.0 is a no-op
+            assert np.allclose(x, y) if backend == "numpy" else torch.allclose(x, y)
+        else:
+            # a round trip at any other scale loses detail
+            assert not (np.allclose(x, y) if backend == "numpy" else torch.allclose(x, y))
+
+    def test_resolution_downgrade_invalid_scale(self) -> None:
+        with pytest.raises(ValueError):
+            tfs.ResizeRoundTrip(dim=(0, 1), scale=0.0)
+        with pytest.raises(ValueError):
+            tfs.ResizeRoundTrip(dim=(0, 1), scale=-1.0)
+
+    @pytest.mark.parametrize("mode", ["train", "eval"])
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("dim", [(0, 1), (1, 2)])
+    def test_random_resolution_downgrade(
+        self, mode: Literal["train", "eval"], backend: Literal["numpy", "torch"], dim: Tuple[int, int]
+    ) -> None:
+        tf = tfs.RandomResizeRoundTrip(dim=dim, scale_range=(0.25, 0.75))
+        transform_set_mode(tf, mode)
+
+        x = transform_create_input(backend, (3, 16, 16))
+        y = tf(x)
+
+        assert x.shape == y.shape
+        assert x.dtype == y.dtype
+
+        if mode == "eval":
+            assert np.array_equal(x, y) if backend == "numpy" else torch.equal(y, x)
+        else:
+            assert not (np.allclose(x, y) if backend == "numpy" else torch.allclose(x, y))
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("angle", [0.0, 45.0, 180.0])
+    def test_rotate_any_degree(self, backend: Literal["numpy", "torch"], angle: float) -> None:
+        tf = tfs.RotateAnyDegree(dim=(0, 1), angle=angle)
+
+        x = transform_create_input(backend, (16, 16))
+        y = tf(x)
+
+        assert x.shape == y.shape
+        assert x.dtype == y.dtype
+        if angle == 0.0:
+            # a rotation by 0 degrees is a no-op
+            assert np.allclose(x, y) if backend == "numpy" else torch.allclose(x, y)
+        else:
+            assert not (np.allclose(x, y) if backend == "numpy" else torch.allclose(x, y))
+
+    def test_rotate_any_degree_invalid_angle(self) -> None:
+        with pytest.raises(ValueError):
+            tfs.RotateAnyDegree(dim=(0, 1), angle=-1.0)
+        with pytest.raises(ValueError):
+            tfs.RotateAnyDegree(dim=(0, 1), angle=360.0)
+
+    @pytest.mark.parametrize("mode", ["train", "eval"])
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("dim", [(0, 1), (1, 2)])
+    def test_random_rotate_any_degree(
+        self, mode: Literal["train", "eval"], backend: Literal["numpy", "torch"], dim: Tuple[int, int]
+    ) -> None:
+        tf = tfs.RandomRotateAnyDegree(dim=dim)
+        transform_set_mode(tf, mode)
+
+        x = transform_create_input(backend, (3, 16, 16))
+        y = tf(x)
+
+        assert x.shape == y.shape
+        assert x.dtype == y.dtype
+
+        if mode == "eval":
+            assert np.array_equal(x, y) if backend == "numpy" else torch.equal(y, x)
+        else:
+            assert not (np.allclose(x, y) if backend == "numpy" else torch.allclose(x, y))

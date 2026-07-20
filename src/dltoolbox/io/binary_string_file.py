@@ -35,10 +35,7 @@ class BinaryStringFile:
         return self
 
     def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: TracebackType | None,
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
     ) -> None:
         self.close()
 
@@ -77,15 +74,12 @@ class BinaryStringFile:
             return None
         if len(length_bytes) < self._PREFIX_SIZE:
             raise CorruptedFileError(
-                f"truncated length prefix: expected {self._PREFIX_SIZE} bytes, "
-                f"got {len(length_bytes)}"
+                f"truncated length prefix: expected {self._PREFIX_SIZE} bytes, got {len(length_bytes)}"
             )
         length = int.from_bytes(length_bytes, self._BYTE_ORDER)
         payload = self._file.read(length)
         if len(payload) < length:
-            raise CorruptedFileError(
-                f"truncated payload: expected {length} bytes, got {len(payload)}"
-            )
+            raise CorruptedFileError(f"truncated payload: expected {length} bytes, got {len(payload)}")
         try:
             return payload.decode(self.ENCODING)
         except UnicodeDecodeError as exc:
@@ -98,7 +92,4 @@ class BinaryStringFile:
 
     def _require_mode(self, *allowed: str) -> None:
         if self._mode not in allowed:
-            raise IOError(
-                f"operation not permitted in mode {self._mode!r}; "
-                f"requires one of {sorted(allowed)}"
-            )
+            raise IOError(f"operation not permitted in mode {self._mode!r}; requires one of {sorted(allowed)}")

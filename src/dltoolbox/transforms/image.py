@@ -6,36 +6,11 @@ import numpy as np
 import torch
 import torchvision
 from PIL import Image
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, rotate, zoom
 
 from dltoolbox.transforms._image_utils_np import adjust_brightness, adjust_contrast, adjust_hue, adjust_saturation
 from dltoolbox.transforms._utils import make_slices
 from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
-
-
-class RandomCrop(TransformerWithMode):
-    """Crop the given image at a random location. The input is expected to have shape [..., H, W]."""
-
-    def __init__(self, size: Union[int, Tuple[int, int]]) -> None:
-        super().__init__()
-        self._th, self._tw = size if isinstance(size, tuple) else (size, size)
-
-    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
-        h, w = x.shape[-2:]
-        if h < self._th or w < self._tw:
-            raise ValueError(f"crop size {(self._th, self._tw)} is larger than input image size {(h, w)}")
-        if h == self._th and w == self._tw:
-            return x
-
-        if self.is_eval_mode():
-            # perform a center crop in eval mode
-            i = (h - self._th + 1) // 2
-            j = (w - self._tw + 1) // 2
-            return x[..., i : i + self._th, j : j + self._tw]
-        else:
-            i = np.random.randint(0, h - self._th + 1)
-            j = np.random.randint(0, w - self._tw + 1)
-            return x[..., i : i + self._th, j : j + self._tw]
 
 
 class RandomPatchesInGrid(TransformerWithMode):
@@ -169,6 +144,56 @@ class RandomRotate90(TransformerWithMode):
             return torch.rot90(x, k, dims=self._dim)
         else:
             raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
+
+
+class RotateAnyDegree(TransformerBase):
+    """Rotate the input by an arbitrary angle within two dimensions, keeping the original shape.
+
+    Out-of-bounds pixels introduced by the rotation are filled with ``fill_value``. Uses bilinear
+    interpolation (``order=1``).
+    """
+
+    def __init__(self, dim: tuple[int, int], angle: float, fill_value: float = 0.0):
+        if not 0 <= angle < 360:
+            raise ValueError("angle must be in the half-open interval [0, 360)")
+        self._dim = dim
+        self._angle = angle
+        self._fill_value = fill_value
+
+    @staticmethod
+    def compute_rotation(
+        x: Union[np.ndarray, torch.Tensor], angle: float, dim: tuple[int, int], fill_value: float = 0.0
+    ) -> Union[np.ndarray, torch.Tensor]:
+        is_tensor = isinstance(x, torch.Tensor)
+        device = None
+        if is_tensor:
+            device = x.device
+            x = x.detach().cpu().numpy()
+
+        rotated = rotate(x, angle, axes=dim, reshape=False, order=1, cval=fill_value)
+
+        if is_tensor:
+            rotated = torch.from_numpy(rotated).to(device)  # TODO: why rotated.copy() ?
+
+        return rotated
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        return self.compute_rotation(x, self._angle, self._dim, self._fill_value)
+
+
+class RandomRotateAnyDegree(TransformerWithMode):
+    """Randomized variant of ``RotateAnyDegree``."""
+
+    def __init__(self, dim: tuple[int, int], fill_value: float = 0.0):
+        super().__init__()
+        self._dim = dim
+        self._fill_value = fill_value
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if self.is_eval_mode():
+            return x
+        angle = np.random.uniform(0, 360)
+        return RotateAnyDegree.compute_rotation(x, angle, self._dim, self._fill_value)
 
 
 class RandomErasing(TransformerWithMode):
@@ -385,3 +410,60 @@ class ColorJitter(TransformerWithMode):
                 elif index == 3:
                     x = adjust_hue(x, h)
             return x
+
+
+class ResizeRoundTrip(TransformerBase):
+    """Resize the spatial dims by ``scale`` and back, losing detail.
+
+    ``scale < 1`` downscales to ``round(scale * P)`` then back to ``P`` (true
+    downsampling, high-frequency loss); ``scale > 1`` upscales to ``round(scale
+    * P)`` then back (interpolation smoothing). Both round-trips return the
+    original spatial size. Usees bilinear interpolation (``order=1``).
+    """
+
+    def __init__(self, dim: tuple[int, int], scale: float) -> None:
+        if scale <= 0:
+            raise ValueError(f"scale must be positive, got {scale}")
+        self._dim = dim
+        self._scale = scale
+
+    @staticmethod
+    def compute_round_trip(
+        x: Union[np.ndarray, torch.Tensor], scale: float, dim: Tuple[int, int]
+    ) -> Union[np.ndarray, torch.Tensor]:
+        is_tensor = isinstance(x, torch.Tensor)
+        device = x.device if is_tensor else None
+        arr = x.detach().cpu().numpy() if is_tensor else x
+
+        down_factors = np.ones(arr.ndim)
+        for d in dim:
+            down_factors[d] = scale
+        downscaled = zoom(arr, down_factors, order=1)
+
+        up_factors = np.ones(arr.ndim)
+        for d in dim:
+            up_factors[d] = arr.shape[d] / downscaled.shape[d]
+        result = zoom(downscaled, up_factors, order=1)
+
+        if is_tensor:
+            return torch.from_numpy(result).to(device)
+        return result
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        return self.compute_round_trip(x, self._scale, self._dim)
+
+
+class RandomResizeRoundTrip(TransformerWithMode):
+    """Randomized variant of ``ResolutionDowngrade``."""
+
+    def __init__(self, dim: tuple[int, int], scale_range: tuple[float, float] = (0.25, 0.75)) -> None:
+        super().__init__()
+        self._dim = dim
+        self._scale_range = scale_range
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        if self.is_eval_mode():
+            return x
+
+        scale = np.random.uniform(*self._scale_range)
+        return ResizeRoundTrip.compute_round_trip(x, scale, self._dim)

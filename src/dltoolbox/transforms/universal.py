@@ -5,7 +5,8 @@ import numpy as np
 import torch
 
 from dltoolbox.normalization import Normalization, WelfordEstimator
-from dltoolbox.transforms.core import TransformerBase
+from dltoolbox.transforms._utils import make_slices
+from dltoolbox.transforms.core import TransformerBase, TransformerWithMode
 from dltoolbox.utils import inverse_permutation
 
 
@@ -158,3 +159,57 @@ class Reshape(TransformerBase):
             return torch.reshape(x, self._shape)
         else:
             raise ValueError(f"expected np.ndarray or torch.Tensor, got {type(x).__name__}")
+
+
+class CenterCrop(TransformerBase):
+    """Crop the given input at the center to the requested size."""
+
+    def __init__(self, *, dim: int | tuple[int, ...], size: int | tuple[int, ...]) -> None:
+        self._dim: tuple[int, ...] = dim if isinstance(dim, tuple) else (dim,)
+        if isinstance(size, tuple):
+            if len(size) != len(self._dim):
+                raise ValueError("size tuple must have the same length as dim")
+            self._size: tuple[int, ...] = size
+        else:
+            self._size: tuple[int, ...] = tuple(size for _ in range(len(self._dim)))
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        slices = []
+        for dim, size in zip(self._dim, self._size):
+            dim_size = x.shape[dim]
+            if dim_size < size:
+                raise ValueError(f"crop size {size} is larger than input size {dim_size} along dim {dim}")
+            i = (dim_size - size + 1) // 2
+            slices.append(slice(i, i + size))
+
+        return x[make_slices(x.shape, self._dim, tuple(slices))]
+
+
+class RandomCrop(TransformerWithMode):
+    """Crop the given input at a random location to the requested size."""
+
+    def __init__(self, *, dim: int | tuple[int, ...], size: int | tuple[int, ...]) -> None:
+        super().__init__()
+        self._dim: tuple[int, ...] = dim if isinstance(dim, tuple) else (dim,)
+        if isinstance(size, tuple):
+            if len(size) != len(self._dim):
+                raise ValueError("size tuple must have the same length as dim")
+            self._size: tuple[int, ...] = size
+        else:
+            self._size: tuple[int, ...] = tuple(size for _ in range(len(self._dim)))
+
+    def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
+        slices = []
+        for dim, size in zip(self._dim, self._size):
+            dim_size = x.shape[dim]
+            if dim_size < size:
+                raise ValueError(f"crop size {size} is larger than input size {dim_size} along dim {dim}")
+
+            if self.is_eval_mode():
+                # perform a center crop in eval mode
+                i = (dim_size - size + 1) // 2
+            else:
+                i = np.random.randint(0, dim_size - size + 1)
+            slices.append(slice(i, i + size))
+
+        return x[make_slices(x.shape, self._dim, tuple(slices))]

@@ -54,6 +54,7 @@ class TestTransforms:
 
         x["one"][1, :] = 2
         assert "two" in y and np.any(y["two"] == 1)
+        assert "two" in z and np.any(z["two"] == 2)  # shallow clone shares memory
 
     @pytest.mark.parametrize("keys", ["one", ("one", "two")])
     def test_dict_apply(self, keys: str | Tuple[str, ...]) -> None:

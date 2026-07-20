@@ -6,10 +6,111 @@ import torch
 
 import dltoolbox.transforms as tfs
 from dltoolbox.normalization import WelfordEstimator
-from tests.utils import transform_create_input
+from tests.utils import transform_create_input, transform_set_mode
 
 
 class TestTransformsUniversal:
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize(
+        ("dim", "size"), [(0, 4), (1, 4), (-1, 4), ((0,), (4,)), ((0, 1), (4, 6)), ((0, -1), (4, 6))]
+    )
+    def test_center_crop(
+        self, backend: Literal["numpy", "torch"], dim: int | Tuple[int, ...], size: int | Tuple[int, ...]
+    ) -> None:
+        x = transform_create_input(backend, shape=(8, 10))
+
+        tf = tfs.CenterCrop(dim=dim, size=size)
+        y = tf(x)
+
+        dims = dim if isinstance(dim, tuple) else (dim,)
+        sizes = size if isinstance(size, tuple) else (size,)
+
+        expected_slices = [slice(None)] * x.ndim
+        for d, s in zip(dims, sizes):
+            i = (x.shape[d] - s + 1) // 2
+            expected_slices[d] = slice(i, i + s)
+
+        expected = x[tuple(expected_slices)]
+
+        assert y.shape == expected.shape
+        if backend == "numpy":
+            assert np.array_equal(y, expected)
+        else:
+            assert torch.equal(y, expected)
+
+    def test_center_crop_size_larger_than_input_raises(self) -> None:
+        x = transform_create_input("numpy", shape=(8, 10))
+
+        tf = tfs.CenterCrop(dim=0, size=16)
+        with pytest.raises(ValueError):
+            tf(x)
+
+    def test_center_crop_mismatched_size_tuple_raises(self) -> None:
+        with pytest.raises(ValueError):
+            tfs.CenterCrop(dim=(0, 1), size=(4,))
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    def test_center_crop_noop_when_size_matches(self, backend: Literal["numpy", "torch"]) -> None:
+        x = transform_create_input(backend, shape=(8, 10))
+
+        tf = tfs.CenterCrop(dim=(0, 1), size=(8, 10))
+        y = tf(x)
+
+        if backend == "numpy":
+            assert np.array_equal(y, x)
+        else:
+            assert torch.equal(y, x)
+
+    @pytest.mark.parametrize("mode", ["train", "eval"])
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize(
+        ("dim", "size"), [(0, 4), (1, 4), (-1, 4), ((0,), (4,)), ((0, 1), (4, 6)), ((0, -1), (4, 6))]
+    )
+    def test_random_crop(
+        self,
+        mode: Literal["train", "eval"],
+        backend: Literal["numpy", "torch"],
+        dim: int | Tuple[int, ...],
+        size: int | Tuple[int, ...],
+    ) -> None:
+        x = transform_create_input(backend, shape=(8, 10))
+
+        tf = tfs.RandomCrop(dim=dim, size=size)
+        transform_set_mode(tf, mode)
+        y = tf(x)
+
+        dims = dim if isinstance(dim, tuple) else (dim,)
+        sizes = size if isinstance(size, tuple) else (size,)
+
+        expected_shape = list(x.shape)
+        for d, s in zip(dims, sizes):
+            expected_shape[d] = s
+        assert tuple(y.shape) == tuple(expected_shape)
+
+        if mode == "eval":
+            # eval mode performs a deterministic center crop
+            expected_slices = [slice(None)] * x.ndim
+            for d, s in zip(dims, sizes):
+                i = (x.shape[d] - s + 1) // 2
+                expected_slices[d] = slice(i, i + s)
+            expected = x[tuple(expected_slices)]
+
+            if backend == "numpy":
+                assert np.array_equal(y, expected)
+            else:
+                assert torch.equal(y, expected)
+
+    def test_random_crop_size_larger_than_input_raises(self) -> None:
+        x = transform_create_input("numpy", shape=(8, 10))
+
+        tf = tfs.RandomCrop(dim=0, size=16)
+        with pytest.raises(ValueError):
+            tf(x)
+
+    def test_random_crop_mismatched_size_tuple_raises(self) -> None:
+        with pytest.raises(ValueError):
+            tfs.RandomCrop(dim=(0, 1), size=(4,))
+
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     @pytest.mark.parametrize("dim", [0, 1, -1, (0,), (1,), (-1,), (0, 1), (0, -1)])
     def test_flip(self, backend: Literal["numpy", "torch"], dim: int | Tuple[int, ...]) -> None:
