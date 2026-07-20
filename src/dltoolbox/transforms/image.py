@@ -246,24 +246,30 @@ class RandomErasing(TransformerWithMode):
 
 
 class RandomNoise(TransformerWithMode):
-    """
-    Add random noise to the input data.
-    The random noise is taken from a normal distribution with std=1, then normalized to [-1, 1], and finally scaled.
+    """Add i.i.d. Gaussian noise with standard deviation ``scale`` to the input.
+
+    The image is expected in ``[0, 255]`` and the result is always clipped back
+    to that range (to the dtype's own bounds for integer dtypes, to ``[0, 255]``
+    for float dtypes). Pixels within ``scale`` of the clip range's floor or
+    ceiling are censored asymmetrically (only the noise draws pushing them back
+    toward the interior survive unclipped), which biases values near the
+    boundary away from the floor/ceiling. A private ``numpy.random.Generator``
+    seeded at construction makes the noise reproducible independent of the
+    global RNG state and call order.
     """
 
-    def __init__(self, dim: Tuple[int, ...], scale: float = 1.0) -> None:
+    def __init__(self, dim: Tuple[int, ...], scale: float = 1.0, *, seed: int = 0) -> None:
         super().__init__()
         self._dim = dim
         self._scale = scale
+        self._rng = np.random.default_rng(seed)
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         if self.is_eval_mode():
             return x
 
         size = tuple(x.shape[d] for d in self._dim)
-        noise = np.random.normal(0, 1, size)  # mean=0, std=1, dtype=float64
-        noise = np.interp(noise, (noise.min(), noise.max()), (-1, 1))  # normalize to [-1, 1]
-        noise *= self._scale
+        noise = self._rng.normal(0, self._scale, size)  # mean=0, std=scale, dtype=float64
 
         if isinstance(x, np.ndarray):
             if issubclass(x.dtype.type, np.integer):
@@ -271,16 +277,17 @@ class RandomNoise(TransformerWithMode):
                 dtype_info = np.iinfo(x.dtype)
                 return np.clip(x.astype(np.float64) + noise, a_min=dtype_info.min, a_max=dtype_info.max).astype(x.dtype)
             else:
-                return x + noise.astype(x.dtype)
+                return np.clip(x.astype(np.float64) + noise, a_min=0.0, a_max=255.0).astype(x.dtype)
         elif isinstance(x, torch.Tensor):
+            noise_t = torch.from_numpy(noise).to(x.device)
             if not torch.is_floating_point(x) and not torch.is_complex(x):
                 # tensor has integer dtype and needs careful boundary handling
                 dtype_info = np.iinfo(np.dtype(str(x.dtype).lstrip("torch.")))
                 return torch.clamp(
-                    x.to(torch.float64) + torch.from_numpy(noise), min=dtype_info.min, max=dtype_info.max
+                    x.to(torch.float64) + noise_t.to(torch.float64), min=dtype_info.min, max=dtype_info.max
                 ).to(x.dtype)
             else:
-                return x + torch.from_numpy(noise).to(x.dtype)
+                return torch.clamp(x.to(torch.float64) + noise_t.to(torch.float64), min=0.0, max=255.0).to(x.dtype)
         else:
             raise ValueError(f"expected torch.Tensor or np.ndarray, got {type(x)}")
 
