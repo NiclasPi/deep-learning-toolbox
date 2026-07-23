@@ -55,7 +55,12 @@ def read_audio(
 
 
 def read_image(
-    file_path: str, target_size: int | tuple[int, int], *, randomized_crop: bool = False, scale_to_fit: bool = False
+    file_path: str,
+    target_size: int | tuple[int, int],
+    *,
+    randomized_crop: bool = False,
+    scale_to_fit: bool = False,
+    crop_origin: tuple[int, int] | None = None,
 ) -> np.ndarray:
     """Load an image file from disk and return it as a numpy array.
 
@@ -69,10 +74,16 @@ def read_image(
         scale_to_fit (bool):
             If True, scale image so smaller side fits target, then crop larger side.
             If False, crop directly from original image.
+        crop_origin (tuple[int, int], optional):
+            Explicit (left, top) origin to crop at, e.g. for extracting a fixed tile.
+            Mutually exclusive with ``randomized_crop`` and ``scale_to_fit``.
 
     Returns:
         Image as numpy array with shape (height, width, 3) and dtype uint8
     """
+    if crop_origin is not None and (randomized_crop or scale_to_fit):
+        raise ValueError("crop_origin cannot be combined with randomized_crop or scale_to_fit")
+
     image = Image.open(file_path).convert("RGB")
 
     if scale_to_fit:
@@ -83,6 +94,6 @@ def read_image(
     ):
         raise ImageTooSmallError(image.size, target_size)
 
-    image = crop_image(image=image, target_shape=target_size, randomized_crop=randomized_crop)
+    image = crop_image(image=image, target_shape=target_size, randomized_crop=randomized_crop, crop_origin=crop_origin)
 
     return np.array(image, dtype=np.uint8)

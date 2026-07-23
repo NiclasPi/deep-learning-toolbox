@@ -4,7 +4,11 @@ from PIL.Image import Image
 
 
 def calculate_crop_box(
-    *, image_size: int | tuple[int, int], target_size: int | tuple[int, int], randomized_crop: bool = False
+    *,
+    image_size: int | tuple[int, int],
+    target_size: int | tuple[int, int],
+    randomized_crop: bool = False,
+    crop_origin: tuple[int, int] | None = None,
 ) -> tuple[int, int, int, int]:
     """Compute the crop box for the provided target size.
 
@@ -12,6 +16,8 @@ def calculate_crop_box(
         image_size: The size of the image.
         target_size: The size of the target image.
         randomized_crop: Return a random crop location. If False, return the center crop box.
+        crop_origin: Explicit (left, top) origin of the crop. When given, it takes
+            precedence over ``randomized_crop`` and the box is anchored there.
 
     Returns:
         The crop box, a 4-tuple defining the left, upper, right, and lower pixel coordinate.
@@ -25,7 +31,15 @@ def calculate_crop_box(
     else:
         target_width, target_height = target_size
 
-    if randomized_crop:
+    if crop_origin is not None:
+        # crop at an explicit top-left location
+        x, y = crop_origin
+        if x < 0 or y < 0 or x + target_width > image_width or y + target_height > image_height:
+            raise ValueError(
+                f"crop_origin {crop_origin} with target size {(target_width, target_height)} "
+                f"exceeds image bounds {(image_width, image_height)}"
+            )
+    elif randomized_crop:
         # random crop
         max_x = image_width - target_width
         max_y = image_height - target_height
@@ -39,7 +53,13 @@ def calculate_crop_box(
     return x, y, x + target_width, y + target_height
 
 
-def crop_image(*, image: Image, target_shape: int | tuple[int, int], randomized_crop: bool = False) -> Image:
+def crop_image(
+    *,
+    image: Image,
+    target_shape: int | tuple[int, int],
+    randomized_crop: bool = False,
+    crop_origin: tuple[int, int] | None = None,
+) -> Image:
     """Crop the given image and return the cropped image.
 
     Args:
@@ -48,9 +68,13 @@ def crop_image(*, image: Image, target_shape: int | tuple[int, int], randomized_
             The desired target size. If a single integer is provided, both width and height
             are set to this value.
         randomized_crop (bool): Whether to crop at a random location.
+        crop_origin: Explicit (left, top) origin of the crop. Takes precedence over
+            ``randomized_crop`` when provided.
 
     Returns:
         A new image resized to cover the target size while maintaining aspect ratio.
     """
-    crop_box = calculate_crop_box(image_size=image.size, target_size=target_shape, randomized_crop=randomized_crop)
+    crop_box = calculate_crop_box(
+        image_size=image.size, target_size=target_shape, randomized_crop=randomized_crop, crop_origin=crop_origin
+    )
     return image.crop(crop_box)
