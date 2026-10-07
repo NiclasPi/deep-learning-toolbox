@@ -20,21 +20,28 @@ from dltoolbox.dataset.errors import (
     SampleSequenceLengthMismatchError,
 )
 from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
-from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaEncoder
+from dltoolbox.dataset.metadata.sample_meta_protocols import PayloadEncoder
 from dltoolbox.multiprocess import get_multiprocess_config
+
+
+LoaderFunc = Callable[[Path], np.ndarray] | Callable[[Path], tuple[np.ndarray, Any]]
 
 
 def _default_json_encoder(obj: Any) -> bytes:
     return json.dumps(obj).encode("utf-8")
 
 
-def _encode_meta_to_vlen_uint8(sample_meta: Sequence[Any], encoder: SampleMetaEncoder[Any]) -> np.ndarray:
+def _bytes_to_vlen_uint8(encoded: Sequence[bytes]) -> np.ndarray:
     # Build a 1-D object array of uint8 arrays; constructing this column-wise avoids
     # numpy auto-stacking equal-length rows into a 2-D array, which h5py's vlen writer rejects.
-    out = np.empty(len(sample_meta), dtype=object)
-    for i, m in enumerate(sample_meta):
-        out[i] = np.frombuffer(encoder(m), dtype=np.uint8)
+    out = np.empty(len(encoded), dtype=object)
+    for i, b in enumerate(encoded):
+        out[i] = np.frombuffer(b, dtype=np.uint8)
     return out
+
+
+def _encode_to_vlen_uint8(payloads: Sequence[Any], encoder: PayloadEncoder[Any]) -> np.ndarray:
+    return _bytes_to_vlen_uint8([encoder(p) for p in payloads])
 
 
 def _prepare_user_block(user_block: DatasetMetadata | bytes | None) -> tuple[int, bytes | None]:
@@ -52,7 +59,7 @@ def create_dataset_from_arrays(
     labels: np.ndarray | None = None,
     sample_ids: Sequence[str] | None = None,
     sample_meta: Sequence[Any] | None = None,
-    sample_meta_encoder: SampleMetaEncoder[Any] | None = None,
+    sample_meta_encoder: PayloadEncoder[Any] | None = None,
     user_block: DatasetMetadata | bytes | None = None,
     data_key: str = "data",
     labels_key: str = "labels",
@@ -85,7 +92,7 @@ def create_dataset_from_arrays(
         sample_meta (Sequence[Any], optional):
             Per-sample metadata payloads, index-matched with `data`. Must be
             provided together with `sample_ids`.
-        sample_meta_encoder (SampleMetaEncoder, optional):
+        sample_meta_encoder (PayloadEncoder, optional):
             Callable converting each `sample_meta` entry to bytes. Defaults to
             a JSON encoder for JSON-native payloads (dict, list, primitives).
         user_block (DatasetMetadata | bytes, optional):
@@ -129,11 +136,11 @@ def create_dataset_from_arrays(
 
         if sample_ids is not None:
             # default encoder handles JSON-native payloads (dict, list, primitives);
-            # callers with typed payloads (e.g. dataclasses) supply their own SampleMetaEncoder
+            # callers with typed payloads (e.g. dataclasses) supply their own PayloadEncoder
             encoder = sample_meta_encoder if sample_meta_encoder is not None else _default_json_encoder
             h5_file.create_dataset(sample_ids_key, data=list(sample_ids), dtype=h5py.string_dtype())
             h5_file.create_dataset(
-                sample_meta_key, data=_encode_meta_to_vlen_uint8(sample_meta, encoder), dtype=h5py.vlen_dtype(np.uint8)
+                sample_meta_key, data=_encode_to_vlen_uint8(sample_meta, encoder), dtype=h5py.vlen_dtype(np.uint8)
             )
 
     if ub_size > 0 and ub_bytes:
@@ -149,7 +156,8 @@ def process_batch(
     sample_paths: list[Path],
     sample_shape: tuple[int, ...],
     sample_dtype: np.dtype,
-    loader_func: Callable[[Path], np.ndarray],
+    loader_func: LoaderFunc,
+    extra_encoder: PayloadEncoder[Any] | None = None,
 ) -> None:
     slot_id: str | None = None
     shared_memory: SharedMemory | None = None
@@ -160,15 +168,28 @@ def process_batch(
             return
         shared_memory = SharedMemory(name=f"create_dataset_{slot_id}")
         batch_array = np.ndarray(shape=(len(sample_paths), *sample_shape), dtype=sample_dtype, buffer=shared_memory.buf)
-        current_index = 0
+        # offsets within the batch of the samples that succeeded, in the order they were written;
+        # several samples may share a path, so the main process must not match failures by path
+        ok_offsets: list[int] = []
+        # extra payloads are encoded here rather than in the main process, so an encoding
+        # failure drops only its sample instead of aborting the run after all batches are loaded
+        encoded_extras: list[bytes] = []
         encountered_errors = []
-        for sample_path in sample_paths:
+        for offset, sample_path in enumerate(sample_paths):
             try:
-                batch_array[current_index] = loader_func(sample_path)
-                current_index += 1
+                result = loader_func(sample_path)
+                if extra_encoder is not None:
+                    array, extra = result
+                    encoded_extra = extra_encoder(extra)
+                else:
+                    array = result
+                batch_array[len(ok_offsets)] = array
+                ok_offsets.append(offset)
+                if extra_encoder is not None:
+                    encoded_extras.append(encoded_extra)
             except Exception as error:
                 encountered_errors.append(BatchProcessItemError(sample_path, error))
-        worker_results_queue.put(("ok", batch_id, slot_id, current_index, encountered_errors))
+        worker_results_queue.put(("ok", batch_id, slot_id, ok_offsets, encountered_errors, encoded_extras))
     except Exception as error:
         tb = traceback.format_exc()
         worker_results_queue.put(("err", batch_id, slot_id, str(error), tb))
@@ -181,18 +202,20 @@ def create_dataset_from_paths(
     output_path: str,
     *,
     sample_paths: Sequence[Path],
-    loader_func: Callable[[Path], np.ndarray],
+    loader_func: LoaderFunc,
     sample_shape: tuple[int, ...],
     sample_dtype: np.dtype,
     labels: np.ndarray | None = None,
     sample_ids: Sequence[str] | None = None,
     sample_meta: Sequence[Any] | None = None,
-    sample_meta_encoder: SampleMetaEncoder[Any] | None = None,
+    sample_meta_encoder: PayloadEncoder[Any] | None = None,
     user_block: DatasetMetadata | bytes | None = None,
     data_key: str = "data",
     labels_key: str = "labels",
     sample_ids_key: str = "metadata/sample_ids",
     sample_meta_key: str = "metadata/sample_meta",
+    extra_key: str | None = None,
+    extra_encoder: PayloadEncoder[Any] | None = None,
     h5_chunk_length: int | None = None,
     h5_compression: str | None = None,
     h5_compression_opts: Any | None = None,
@@ -219,8 +242,10 @@ def create_dataset_from_paths(
     Args:
         output_path (str): Path where the HDF5 file will be written.
         sample_paths (Sequence[Path]): Paths to the raw samples to be loaded.
-        loader_func (Callable[[Path], np.ndarray]):
+        loader_func (Callable[[Path], np.ndarray] | Callable[[Path], tuple[np.ndarray, Any]]):
             Function that loads and optionally preprocesses a sample from disk.
+            Returns the sample array, or a `(array, extra)` tuple when `extra_key`
+            is set.
         sample_shape (tuple[int, ...]): Shape of each sample in the dataset.
         sample_dtype (np.dtype): NumPy dtype of the dataset samples.
         labels (np.ndarray, optional):
@@ -232,7 +257,7 @@ def create_dataset_from_paths(
         sample_meta (Sequence[Any], optional):
             Per-sample metadata payloads, index-aligned with `sample_paths`.
             Must be provided together with `sample_ids`.
-        sample_meta_encoder (SampleMetaEncoder, optional):
+        sample_meta_encoder (PayloadEncoder, optional):
             Callable converting each `sample_meta` entry to bytes. Defaults to
             a JSON encoder for JSON-native payloads (dict, list, primitives).
         user_block (DatasetMetadata | bytes, optional):
@@ -245,6 +270,15 @@ def create_dataset_from_paths(
             The HDF5 dataset key for sample ids.
         sample_meta_key (str, default="metadata/sample_meta"):
             The HDF5 dataset key for sample metadata.
+        extra_key (str, optional):
+            If set, `loader_func` must return `(array, extra)`, and each successful
+            sample's encoded `extra` is stored under this key, index-matched with
+            `data` and encoded with `extra_encoder`.
+        extra_encoder (PayloadEncoder, optional):
+            Callable converting each `extra` payload to bytes. Runs in the worker
+            process, so it must be picklable; an encoding failure skips the sample
+            like a loader failure. Defaults to a JSON encoder. Ignored without
+            `extra_key`.
         h5_chunk_length (int, optional):
             Write the data dataset in chunks of shape (chunk_length, *sample_shape)
             along the first dimension; if None, the dataset is stored contiguously
@@ -302,6 +336,11 @@ def create_dataset_from_paths(
     batch_item_errors: list[BatchProcessItemError] = []
     # original indices of samples in the order they were written to the dataset
     original_indices_in_order: list[int] = []
+    # encoded extra payloads in the order they were written to the dataset
+    encoded_extras_in_order: list[bytes] = []
+    worker_extra_encoder: PayloadEncoder[Any] | None = None
+    if extra_key is not None:
+        worker_extra_encoder = extra_encoder if extra_encoder is not None else _default_json_encoder
 
     try:
         with h5py.File(output_path, "w-", userblock_size=ub_size, libver="latest") as h5_file:
@@ -330,6 +369,7 @@ def create_dataset_from_paths(
                         sample_shape=sample_shape,
                         sample_dtype=sample_dtype,
                         loader_func=loader_func,
+                        extra_encoder=worker_extra_encoder,
                     )
                     num_batches_submitted += 1
 
@@ -346,17 +386,17 @@ def create_dataset_from_paths(
                             _, batch_id, slot_id, err_str, err_tb = worker_result
                             logging.error(f"worker completed with error: {err_str}\n{err_tb}")
                         elif worker_result[0] == "ok":
-                            actual_count: int
+                            ok_offsets: list[int]
                             item_errors: list[BatchProcessItemError]
-                            _, batch_id, slot_id, actual_count, item_errors = worker_result
+                            encoded_extras: list[bytes]
+                            _, batch_id, slot_id, ok_offsets, item_errors, encoded_extras = worker_result
+                            actual_count = len(ok_offsets)
 
                             # record original indices for successful samples in this batch,
                             # preserving their within-batch order
                             batch_start_index = batch_start_map[batch_id]
-                            batch_samples = sample_paths[batch_start_index : batch_start_index + batch_size]
-                            for offset, batch_sample in enumerate(batch_samples):
-                                if not any(batch_sample.samefile(item_error.file_path) for item_error in item_errors):
-                                    original_indices_in_order.append(batch_start_index + offset)
+                            original_indices_in_order.extend(batch_start_index + offset for offset in ok_offsets)
+                            encoded_extras_in_order.extend(encoded_extras)
 
                             # extend item errors
                             batch_item_errors.extend(item_errors)
@@ -388,6 +428,8 @@ def create_dataset_from_paths(
             # the data length, the per-sample order list, and the header's num_samples must all agree
             if len(original_indices_in_order) != index:
                 raise SampleCountMismatchError(index, len(original_indices_in_order))
+            if extra_key is not None and len(encoded_extras_in_order) != index:
+                raise SampleCountMismatchError(index, len(encoded_extras_in_order))
 
             # loader failures shrink the dataset, so a DatasetMetadata header still claiming the
             # original count would fail num_samples validation at load; rewrite it to the count
@@ -407,7 +449,15 @@ def create_dataset_from_paths(
                 h5_file.create_dataset(sample_ids_key, data=ordered_ids, dtype=h5py.string_dtype())
                 h5_file.create_dataset(
                     sample_meta_key,
-                    data=_encode_meta_to_vlen_uint8(ordered_meta, encoder),
+                    data=_encode_to_vlen_uint8(ordered_meta, encoder),
+                    dtype=h5py.vlen_dtype(np.uint8),
+                )
+
+            # payloads were already encoded by the workers in on-disk order
+            if extra_key is not None:
+                h5_file.create_dataset(
+                    extra_key,
+                    data=_bytes_to_vlen_uint8(encoded_extras_in_order),
                     dtype=h5py.vlen_dtype(np.uint8),
                 )
     finally:

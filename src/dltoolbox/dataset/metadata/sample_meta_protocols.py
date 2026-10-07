@@ -16,14 +16,19 @@ class SampleMetaDecoder[T](Protocol):
 
 
 @runtime_checkable
-class SampleMetaEncoder[T](Protocol):
-    """Encodes one sample's in-memory T into UTF-8 JSON bytes for storage.
+class PayloadEncoder[T](Protocol):
+    """Encodes one sample's in-memory T into bytes for storage.
 
-    The library ships a dict-based default in `create_hdf5_file`; callers with
-    typed payloads (e.g. dataclasses) supply their own.
+    Used for both `sample_meta` and the optional extra loader payload. The library
+    ships a JSON default for dict-based payloads; callers with typed payloads
+    (e.g. dataclasses) supply their own.
     """
 
     def __call__(self, obj: T) -> bytes: ...
+
+
+# kept so existing imports keep working
+SampleMetaEncoder = PayloadEncoder
 
 
 T = TypeVar("T")

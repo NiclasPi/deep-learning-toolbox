@@ -24,6 +24,51 @@ def _unused_loader_func(_path: Path) -> np.ndarray:
     raise NotImplementedError("validation should fail before any sample is loaded")
 
 
+# loaders below run in worker processes and must be picklable, hence module-level
+
+_SAMPLE_SHAPE = (4, 4)
+
+
+def _index_of(path: Path) -> int:
+    return int(path.stem)
+
+
+def _load_index_array(path: Path) -> np.ndarray:
+    return np.full(_SAMPLE_SHAPE, _index_of(path), dtype=np.float32)
+
+
+def _load_index_array_with_extra(path: Path) -> tuple[np.ndarray, dict]:
+    return _load_index_array(path), {"index": _index_of(path)}
+
+
+def _load_failing_every_third(path: Path) -> tuple[np.ndarray, dict]:
+    if _index_of(path) % 3 == 0:
+        raise ValueError("unloadable")
+    return _load_index_array_with_extra(path)
+
+
+def _load_with_unencodable_extra_every_third(path: Path) -> tuple[np.ndarray, object]:
+    array, extra = _load_index_array_with_extra(path)
+    return array, (object() if _index_of(path) % 3 == 0 else extra)
+
+
+def _encode_index_extra(extra: dict) -> bytes:
+    return str(extra["index"]).encode("ascii")
+
+
+@dataclass
+class _FailOnNthCall:
+    # pickled afresh for every batch, so the call count restarts per batch
+    fail_on_call: int
+    calls: int = 0
+
+    def __call__(self, _path: Path) -> np.ndarray:
+        self.calls += 1
+        if self.calls == self.fail_on_call:
+            raise ValueError("unloadable")
+        return np.full(_SAMPLE_SHAPE, self.calls, dtype=np.float32)
+
+
 @pytest.fixture(scope="module")
 def data() -> np.ndarray:
     return np.random.randn(10, 4, 4).astype(np.float32)
@@ -239,3 +284,123 @@ class TestCreateDatasetFromPaths:
                 sample_meta=[SampleMeta(id=i) for i in range(len(sample_paths) - 1)],
                 sample_meta_encoder=_encode_sample_meta,
             )
+
+
+class TestCreateDatasetFromPathsLoading:
+    num_samples = 20
+    # 64-byte samples and 2 workers: 384 bytes leave room for 3 samples per batch, i.e. 7 batches
+    multi_batch_kwargs = {"max_workers": 2, "max_memory": 384}
+
+    @pytest.fixture
+    def index_paths(self) -> list[Path]:
+        # loaders derive everything from the file stem, so the files need not exist
+        return [Path(f"/nonexistent/{i}.bin") for i in range(self.num_samples)]
+
+    def _create(self, out: Path, paths: list[Path], loader_func, **kwargs):
+        return create_dataset_from_paths(
+            str(out),
+            sample_paths=paths,
+            loader_func=loader_func,
+            sample_shape=_SAMPLE_SHAPE,
+            sample_dtype=np.float32,
+            sample_ids=[f"s{_index_of(p)}" for p in paths],
+            sample_meta=[{"index": _index_of(p)} for p in paths],
+            **kwargs,
+        )
+
+    @staticmethod
+    def _read(out: Path, extra_key: str | None = None) -> tuple[list[int], list[str], list[dict], list[bytes] | None]:
+        with h5py.File(str(out), "r") as f:
+            data_indices = [int(sample[0, 0]) for sample in f["data"][:]]
+            ids = [s.decode() for s in f["metadata/sample_ids"][:]]
+            meta = [json.loads(bytes(raw)) for raw in f["metadata/sample_meta"][:]]
+            extras = [bytes(raw) for raw in f[extra_key][:]] if extra_key is not None else None
+        return data_indices, ids, meta, extras
+
+    def test_without_extra_key_no_extra_dataset_is_written(self, tmp_path, index_paths) -> None:
+        out = tmp_path / "out.h5"
+        errors = self._create(out, index_paths, _load_index_array, **self.multi_batch_kwargs)
+
+        assert errors == []
+        data_indices, ids, meta, _ = self._read(out)
+        assert sorted(data_indices) == list(range(self.num_samples))
+        assert ids == [f"s{i}" for i in data_indices]
+        assert meta == [{"index": i} for i in data_indices]
+        with h5py.File(str(out), "r") as f:
+            assert set(f["metadata"].keys()) == {"sample_ids", "sample_meta"}
+
+    def test_extra_payloads_align_with_data_across_batches(self, tmp_path, index_paths) -> None:
+        out = tmp_path / "out.h5"
+        errors = self._create(
+            out, index_paths, _load_index_array_with_extra, extra_key="metadata/extra", **self.multi_batch_kwargs
+        )
+
+        assert errors == []
+        data_indices, ids, _, extras = self._read(out, "metadata/extra")
+        assert sorted(data_indices) == list(range(self.num_samples))
+        assert ids == [f"s{i}" for i in data_indices]
+        assert [json.loads(e) for e in extras] == [{"index": i} for i in data_indices]
+
+    def test_custom_extra_encoder_is_applied(self, tmp_path, index_paths) -> None:
+        out = tmp_path / "out.h5"
+        self._create(
+            out,
+            index_paths,
+            _load_index_array_with_extra,
+            extra_key="metadata/extra",
+            extra_encoder=_encode_index_extra,
+            **self.multi_batch_kwargs,
+        )
+
+        data_indices, _, _, extras = self._read(out, "metadata/extra")
+        assert extras == [str(i).encode("ascii") for i in data_indices]
+
+    def test_loader_failures_shrink_all_per_sample_datasets_consistently(self, tmp_path, index_paths) -> None:
+        out = tmp_path / "out.h5"
+        errors = self._create(
+            out, index_paths, _load_failing_every_third, extra_key="metadata/extra", **self.multi_batch_kwargs
+        )
+
+        expected = [i for i in range(self.num_samples) if i % 3 != 0]
+        assert sorted(_index_of(e.file_path) for e in errors) == [i for i in range(self.num_samples) if i % 3 == 0]
+        data_indices, ids, meta, extras = self._read(out, "metadata/extra")
+        assert sorted(data_indices) == expected
+        assert ids == [f"s{i}" for i in data_indices]
+        assert meta == [{"index": i} for i in data_indices]
+        assert [json.loads(e) for e in extras] == [{"index": i} for i in data_indices]
+
+    def test_extra_encoding_failure_skips_only_that_sample(self, tmp_path, index_paths) -> None:
+        out = tmp_path / "out.h5"
+        errors = self._create(
+            out,
+            index_paths,
+            _load_with_unencodable_extra_every_third,
+            extra_key="metadata/extra",
+            **self.multi_batch_kwargs,
+        )
+
+        assert all(isinstance(e.original_exception, TypeError) for e in errors)
+        data_indices, ids, _, extras = self._read(out, "metadata/extra")
+        assert sorted(data_indices) == [i for i in range(self.num_samples) if i % 3 != 0]
+        assert ids == [f"s{i}" for i in data_indices]
+        assert [json.loads(e) for e in extras] == [{"index": i} for i in data_indices]
+
+    def test_failure_of_one_sample_keeps_other_samples_sharing_its_path(self, tmp_path) -> None:
+        shared = tmp_path / "shared.bin"
+        shared.touch()
+        out = tmp_path / "out.h5"
+        # a single worker loads all four samples in one batch, and the second call fails
+        errors = create_dataset_from_paths(
+            str(out),
+            sample_paths=[shared] * 4,
+            loader_func=_FailOnNthCall(fail_on_call=2),
+            sample_shape=_SAMPLE_SHAPE,
+            sample_dtype=np.float32,
+            labels=np.arange(4, dtype=np.int32),
+            max_workers=1,
+        )
+
+        assert len(errors) == 1
+        with h5py.File(str(out), "r") as f:
+            assert [int(sample[0, 0]) for sample in f["data"][:]] == [1, 3, 4]
+            assert f["labels"][:].tolist() == [0, 2, 3]
