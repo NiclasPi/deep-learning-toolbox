@@ -39,7 +39,7 @@ class H5Dataset[T](Dataset):
         h5_data_key: str = "data",
         h5_label_key: str = "labels",
         h5_sample_ids_key: str = "metadata/sample_ids",
-        h5_sample_meta_key: str = "metadata/sample_meta",
+        h5_sample_meta_key: str | Sequence[str] = "metadata/sample_meta",
         select_indices: Sequence[int] | None = None,
         select_sample_ids: Sequence[str] | None = None,
         static_label: Union[np.ndarray, Tensor, None] = None,
@@ -63,7 +63,8 @@ class H5Dataset[T](Dataset):
             h5_label_key: key of the label dataset; ignored when ``static_label`` is set.
             h5_sample_ids_key: key of the per-sample id dataset, used to resolve ``select_sample_ids`` and to back
                 the sample-meta store.
-            h5_sample_meta_key: key of the per-sample metadata dataset backing the store.
+            h5_sample_meta_key: key of the per-sample metadata dataset backing the store, or several keys; with
+                several, the decoder receives a ``tuple[bytes, ...]`` in the order the keys were given.
             select_indices: positional row indices to expose, in caller order; mutually exclusive with
                 ``select_sample_ids``. ``None`` exposes every row.
             select_sample_ids: sample ids to expose, in caller order; resolved to positional indices via
@@ -219,10 +220,11 @@ class H5Dataset[T](Dataset):
         store_mode: Literal["lazy", "eager"],
         dataset_metadata: DatasetMetadata | None,
         h5_sample_ids_key: str,
-        h5_sample_meta_key: str,
+        h5_sample_meta_key: str | Sequence[str],
         select_indices: Sequence[int] | None,
         sample_meta_decoder: SampleMetaDecoder[T],
     ) -> ISampleMetaStore[T]:
+        meta_keys = [h5_sample_meta_key] if isinstance(h5_sample_meta_key, str) else list(h5_sample_meta_key)
         # skip resolution wrapping when no dataset metadata is available
         decoder = (
             with_resolve(sample_meta_decoder, dataset_metadata) if dataset_metadata is not None else sample_meta_decoder
@@ -231,10 +233,13 @@ class H5Dataset[T](Dataset):
             # share the already-open file handle from the disk instance
             f = self._instance.h5_file
             require_key(f, h5_sample_ids_key)
-            require_key(f, h5_sample_meta_key)
+            for key in meta_keys:
+                require_key(f, key)
             return LazySampleMetaStore(
                 sample_ids_ds=f[h5_sample_ids_key],
-                sample_meta_ds=f[h5_sample_meta_key],
+                sample_meta_ds=f[h5_sample_meta_key]
+                if isinstance(h5_sample_meta_key, str)
+                else [f[k] for k in meta_keys],
                 decoder=decoder,
                 select_indices=select_indices,
             )
@@ -243,10 +248,13 @@ class H5Dataset[T](Dataset):
         # memory mode: open briefly to eagerly decode into RAM, then drop the handle
         with h5py.File(h5_path, "r") as f:
             require_key(f, h5_sample_ids_key)
-            require_key(f, h5_sample_meta_key)
+            for key in meta_keys:
+                require_key(f, key)
             return EagerSampleMetaStore(
                 sample_ids_ds=f[h5_sample_ids_key],
-                sample_meta_ds=f[h5_sample_meta_key],
+                sample_meta_ds=f[h5_sample_meta_key]
+                if isinstance(h5_sample_meta_key, str)
+                else [f[k] for k in meta_keys],
                 decoder=decoder,
                 select_indices=select_indices,
             )

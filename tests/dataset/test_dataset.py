@@ -111,6 +111,69 @@ def create_temporary_hdf5_meta_no_user_block(
     return str(path), data, labels
 
 
+@pytest.fixture(scope="module")
+def create_temporary_hdf5_two_meta_keys(
+    tmp_path_factory, data_shape, labels_shape
+) -> tuple[str, np.ndarray, np.ndarray]:
+    """Per-sample ids+meta plus a second per-sample dataset, `metadata/processing_record`."""
+    path = tmp_path_factory.mktemp("h5_two_meta") / "data.h5"
+    data = np.random.randn(*data_shape).astype(np.float16)
+    labels = np.random.randn(*labels_shape).astype(np.float16)
+    n = data_shape[0]
+
+    create_dataset_from_arrays(
+        str(path),
+        data=data,
+        labels=labels,
+        sample_ids=[f"s{i}" for i in range(n)],
+        sample_meta=[SampleMeta(id=i) for i in range(n)],
+        sample_meta_encoder=_encode_sample_meta,
+    )
+    with h5py.File(path, "r+") as f:
+        f.create_dataset(
+            "metadata/processing_record",
+            data=[json.dumps({"step": i}).encode("utf-8") for i in range(n)],
+            dtype=h5py.string_dtype(),
+        )
+    return str(path), data, labels
+
+
+def _decode_meta_and_record(raw: bytes | tuple[bytes, ...], sample_id: str) -> tuple[SampleMeta, dict]:
+    assert isinstance(raw, tuple)
+    return SampleMeta(**json.loads(raw[0])), json.loads(raw[1])
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_sample_meta_from_multiple_keys(create_temporary_hdf5_two_meta_keys, mode: Literal["disk", "memory"]) -> None:
+    h5_path, _, _ = create_temporary_hdf5_two_meta_keys
+    dataset = H5Dataset[tuple[SampleMeta, dict]](
+        mode,
+        h5_path,
+        ignore_user_block=True,
+        h5_sample_meta_key=("metadata/sample_meta", "metadata/processing_record"),
+        sample_meta_decoder=_decode_meta_and_record,
+    )
+
+    _, _, (meta, record) = dataset[5]
+    assert meta.id == 5
+    assert record == {"step": 5}
+
+
+@pytest.mark.parametrize("mode", ["disk", "memory"])
+def test_sample_meta_multiple_keys_missing_key_raises(
+    create_temporary_hdf5_two_meta_keys, mode: Literal["disk", "memory"]
+) -> None:
+    h5_path, _, _ = create_temporary_hdf5_two_meta_keys
+    with pytest.raises(H5DatasetMissingKeyError):
+        H5Dataset(
+            mode,
+            h5_path,
+            ignore_user_block=True,
+            h5_sample_meta_key=("metadata/sample_meta", "metadata/nope"),
+            sample_meta_decoder=_decode_meta_and_record,
+        )
+
+
 @pytest.mark.parametrize("mode", ["disk", "memory"])
 @pytest.mark.parametrize("axis", [0, 1])
 def test_reads_sample_at_row_dim(create_temporary_hdf5, mode: Literal["disk", "memory"], axis: int) -> None:

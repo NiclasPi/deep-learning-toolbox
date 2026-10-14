@@ -7,12 +7,15 @@ from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 class SampleMetaDecoder[T](Protocol):
     """Decodes one sample's stored bytes back into T.
 
+    `raw` is the row's bytes when the store reads a single key, or a tuple of bytes
+    (one per key, in the order the keys were given) when it reads several.
+
     `sample_id` is passed through so decoders can stamp identity onto the
     returned object, or close over dataset-level context (e.g. `DatasetMetadata`)
     to enrich it — without the library imposing a specific structuring library.
     """
 
-    def __call__(self, raw: bytes, sample_id: str) -> T: ...
+    def __call__(self, raw: bytes | tuple[bytes, ...], sample_id: str) -> T: ...
 
 
 @runtime_checkable
@@ -57,7 +60,7 @@ def with_resolve[T](inner: SampleMetaDecoder[T], header: DatasetMetadata) -> Sam
     the resolve call when applicable — no extra header lookups in `__getitem__`.
     """
 
-    def decode(raw: bytes, sample_id: str) -> T:
+    def decode(raw: bytes | tuple[bytes, ...], sample_id: str) -> T:
         obj = inner(raw, sample_id)
         if is_resolvable(obj):
             return obj.resolve(sample_id, header)

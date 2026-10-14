@@ -273,3 +273,114 @@ def test_get_all_applies_resolve(h5: h5py.File, store_cls: type[ISampleMetaStore
     for sid, item in pairs:
         assert item.id == sid
         assert item.split == header.split
+
+
+def _write_second_dataset(h5: h5py.File, values: list[str]) -> None:
+    h5.create_dataset(
+        "/metadata/processing_record", data=[v.encode("utf-8") for v in values], dtype=h5py.string_dtype()
+    )
+
+
+def _decode_pair(raw: bytes | tuple[bytes, ...], sample_id: str) -> tuple[Meta, dict]:
+    assert isinstance(raw, tuple)
+    meta_raw, record_raw = raw
+    return Meta(**json.loads(meta_raw)), json.loads(record_raw)
+
+
+def test_multiple_keys_decoder_receives_tuple_in_key_order(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    _write_meta_datasets(h5, ["01", "02"], [Meta(name="a", size=1), Meta(name="b", size=2)])
+    _write_second_dataset(h5, ['{"step": 1}', '{"step": 2}'])
+
+    store = store_cls(
+        decoder=_decode_pair,
+        sample_ids_ds=h5["/metadata/sample_ids"],
+        sample_meta_ds=[h5["/metadata/sample_meta"], h5["/metadata/processing_record"]],
+    )
+
+    assert len(store) == 2
+    assert store.get_by_index(1) == (Meta(name="b", size=2), {"step": 2})
+    assert store.get_by_id("01") == (Meta(name="a", size=1), {"step": 1})
+
+    # reversed key order is reflected in the tuple order
+    seen: list[tuple[bytes, ...]] = []
+
+    def capture(raw: bytes | tuple[bytes, ...], sample_id: str) -> int:
+        assert isinstance(raw, tuple)
+        seen.append(raw)
+        return 0
+
+    store = store_cls(
+        decoder=capture,
+        sample_ids_ds=h5["/metadata/sample_ids"],
+        sample_meta_ds=[h5["/metadata/processing_record"], h5["/metadata/sample_meta"]],
+    )
+    store.get_by_index(0)
+    # eager decodes every row at construction, so the first capture is sample 0 in both modes
+    assert seen[0][0] == b'{"step": 1}'
+    assert json.loads(seen[0][1]) == {"name": "a", "size": 1}
+
+
+def test_single_dataset_gets_bytes_and_one_element_sequence_gets_tuple(
+    h5: h5py.File, store_cls: type[ISampleMetaStore]
+) -> None:
+    _write_meta_datasets(h5, ["01"], [Meta(name="a", size=1)])
+    received: list[object] = []
+
+    def capture(raw: bytes | tuple[bytes, ...], sample_id: str) -> int:
+        received.append(raw)
+        return 0
+
+    store_cls(
+        decoder=capture, sample_ids_ds=h5["/metadata/sample_ids"], sample_meta_ds=h5["/metadata/sample_meta"]
+    ).get_by_index(0)
+    store_cls(
+        decoder=capture, sample_ids_ds=h5["/metadata/sample_ids"], sample_meta_ds=[h5["/metadata/sample_meta"]]
+    ).get_by_index(0)
+
+    assert isinstance(received[0], bytes)
+    assert isinstance(received[1], tuple)
+    assert len(received[1]) == 1
+
+
+def test_multiple_keys_select_indices(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    _write_meta_datasets(h5, ["01", "02", "03"], [Meta(name=n, size=i) for i, n in enumerate("abc")])
+    _write_second_dataset(h5, [f'{{"step": {i}}}' for i in range(3)])
+
+    store = store_cls(
+        decoder=_decode_pair,
+        sample_ids_ds=h5["/metadata/sample_ids"],
+        sample_meta_ds=[h5["/metadata/sample_meta"], h5["/metadata/processing_record"]],
+        select_indices=[2, 0],
+    )
+
+    assert store.get_all_ids() == ["03", "01"]
+    assert [item[1]["step"] for _, item in store.get_all()] == [2, 0]
+
+
+def test_multiple_keys_length_mismatch_raises(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    _write_meta_datasets(h5, ["01", "02"], [Meta(name="a", size=1), Meta(name="b", size=2)])
+    _write_second_dataset(h5, ['{"step": 1}'])
+
+    with pytest.raises(SampleMetaLengthMismatchError):
+        store_cls(
+            decoder=_decode_pair,
+            sample_ids_ds=h5["/metadata/sample_ids"],
+            sample_meta_ds=[h5["/metadata/sample_meta"], h5["/metadata/processing_record"]],
+        )
+
+
+def test_multiple_keys_with_resolve(h5: h5py.File, store_cls: type[ISampleMetaStore]) -> None:
+    _write_meta_datasets(h5, ["01"], [ResolvableMeta(name="a")])
+    _write_second_dataset(h5, ['{"extra": 1}'])
+
+    def decode(raw: bytes | tuple[bytes, ...], sample_id: str) -> ResolvableMeta:
+        assert isinstance(raw, tuple)
+        return ResolvableMeta(**json.loads(raw[0]))
+
+    store = store_cls(
+        decoder=with_resolve(decode, _header(1)),
+        sample_ids_ds=h5["/metadata/sample_ids"],
+        sample_meta_ds=[h5["/metadata/sample_meta"], h5["/metadata/processing_record"]],
+    )
+
+    assert store.get_by_index(0) == ResolvableMeta(name="a", id="01", split="train")

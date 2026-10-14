@@ -1,13 +1,30 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import h5py
 import numpy as np
 
-from dltoolbox.dataset.errors import H5DatasetMissingKeyError
+from dltoolbox.dataset.errors import H5DatasetMissingKeyError, SampleMetaLengthMismatchError
 
 
 def read_ids(ds: h5py.Dataset) -> list[str]:
     return [s.decode("utf-8") if isinstance(s, bytes) else s for s in ds[:]]
+
+
+def validate_meta_datasets(
+    sample_ids_ds: h5py.Dataset, sample_meta_ds: h5py.Dataset | Sequence[h5py.Dataset]
+) -> tuple[tuple[h5py.Dataset, ...], bool]:
+    """Check every meta dataset's length against `sample_ids_ds`, raising SampleMetaLengthMismatchError on a mismatch.
+
+    Returns the datasets as a tuple, plus whether the caller passed a sequence (the decoder then gets a tuple of bytes).
+    """
+    multi = not isinstance(sample_meta_ds, h5py.Dataset)
+    datasets = tuple(sample_meta_ds) if multi else (sample_meta_ds,)
+    for ds in datasets:
+        if len(sample_ids_ds) != len(ds):
+            raise SampleMetaLengthMismatchError(len(sample_ids_ds), len(ds))
+    return datasets, multi
 
 
 def require_key(h5_file: h5py.File, key: str) -> None:

@@ -4,8 +4,7 @@ from collections.abc import Sequence
 
 import h5py
 
-from dltoolbox.dataset._utils import read_ids
-from dltoolbox.dataset.errors import SampleMetaLengthMismatchError
+from dltoolbox.dataset._utils import read_ids, validate_meta_datasets
 from dltoolbox.dataset.metadata.isample_meta_store import ISampleMetaStore
 from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaDecoder
 
@@ -25,15 +24,13 @@ class LazySampleMetaStore[T](ISampleMetaStore[T]):
         self,
         *,
         sample_ids_ds: h5py.Dataset,
-        sample_meta_ds: h5py.Dataset,
+        sample_meta_ds: h5py.Dataset | Sequence[h5py.Dataset],
         decoder: SampleMetaDecoder[T],
         select_indices: Sequence[int] | None = None,
     ) -> None:
-        if len(sample_ids_ds) != len(sample_meta_ds):
-            raise SampleMetaLengthMismatchError(len(sample_ids_ds), len(sample_meta_ds))
+        self._sample_meta_dss, self._multi = validate_meta_datasets(sample_ids_ds, sample_meta_ds)
 
         self._sample_ids_ds = sample_ids_ds
-        self._sample_meta_ds = sample_meta_ds
         self._original_indices: list[int] | None = list(select_indices) if select_indices is not None else None
         self._decoder = decoder
 
@@ -48,15 +45,15 @@ class LazySampleMetaStore[T](ISampleMetaStore[T]):
     def __len__(self) -> int:
         if self._original_indices is not None:
             return len(self._original_indices)
-        return len(self._sample_meta_ds)
+        return len(self._sample_ids_ds)
 
     def get_by_index(self, index: int) -> T:
         original_index = self._original_indices[index] if self._original_indices is not None else index
         sample_id = self._sample_ids_ds[original_index]
         if isinstance(sample_id, bytes):
             sample_id = sample_id.decode("utf-8")
-        raw = self._sample_meta_ds[original_index]
-        return self._decoder(bytes(raw), sample_id)
+        rows = tuple(bytes(ds[original_index]) for ds in self._sample_meta_dss)
+        return self._decoder(rows if self._multi else rows[0], sample_id)
 
     def get_by_id(self, identifier: str) -> T:
         return self.get_by_index(self._id_to_index[identifier])

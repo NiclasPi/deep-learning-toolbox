@@ -4,8 +4,7 @@ from collections.abc import Sequence
 
 import h5py
 
-from dltoolbox.dataset._utils import read_ids
-from dltoolbox.dataset.errors import SampleMetaLengthMismatchError
+from dltoolbox.dataset._utils import read_ids, validate_meta_datasets
 from dltoolbox.dataset.metadata.isample_meta_store import ISampleMetaStore
 from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaDecoder
 
@@ -22,25 +21,30 @@ class EagerSampleMetaStore[T](ISampleMetaStore[T]):
         self,
         *,
         sample_ids_ds: h5py.Dataset,
-        sample_meta_ds: h5py.Dataset,
+        sample_meta_ds: h5py.Dataset | Sequence[h5py.Dataset],
         decoder: SampleMetaDecoder[T],
         select_indices: Sequence[int] | None = None,
     ) -> None:
-        if len(sample_ids_ds) != len(sample_meta_ds):
-            raise SampleMetaLengthMismatchError(len(sample_ids_ds), len(sample_meta_ds))
+        meta_dss, multi = validate_meta_datasets(sample_ids_ds, sample_meta_ds)
 
         all_ids = read_ids(sample_ids_ds)
-        all_raw = sample_meta_ds[:]
+        all_raw = [ds[:] for ds in meta_dss]
 
         if select_indices is None:
             view_ids = all_ids
             view_raw = all_raw
         else:
             view_ids = [all_ids[i] for i in select_indices]
-            view_raw = [all_raw[i] for i in select_indices]
+            view_raw = [[raw[i] for i in select_indices] for raw in all_raw]
+
+        def pack(row: tuple[object, ...]) -> bytes | tuple[bytes, ...]:
+            rows = tuple(bytes(r) for r in row)  # type: ignore[call-overload]
+            return rows if multi else rows[0]
 
         self._ids: list[str] = list(view_ids)
-        self._items: list[T] = [decoder(bytes(raw), sid) for sid, raw in zip(view_ids, view_raw, strict=True)]
+        self._items: list[T] = [
+            decoder(pack(row), sid) for sid, row in zip(view_ids, zip(*view_raw, strict=True), strict=True)
+        ]
         self._id_to_index: dict[str, int] = {sid: i for i, sid in enumerate(view_ids)}
 
     def __len__(self) -> int:

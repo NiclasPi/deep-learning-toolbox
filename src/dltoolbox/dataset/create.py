@@ -23,7 +23,6 @@ from dltoolbox.dataset.metadata.dataset_metadata import DatasetMetadata
 from dltoolbox.dataset.metadata.sample_meta_protocols import PayloadEncoder
 from dltoolbox.multiprocess import get_multiprocess_config
 
-
 LoaderFunc = Callable[[Path], np.ndarray] | Callable[[Path], tuple[np.ndarray, Any]]
 
 
@@ -448,17 +447,13 @@ def create_dataset_from_paths(
                 ordered_meta = [sample_meta[i] for i in original_indices_in_order]
                 h5_file.create_dataset(sample_ids_key, data=ordered_ids, dtype=h5py.string_dtype())
                 h5_file.create_dataset(
-                    sample_meta_key,
-                    data=_encode_to_vlen_uint8(ordered_meta, encoder),
-                    dtype=h5py.vlen_dtype(np.uint8),
+                    sample_meta_key, data=_encode_to_vlen_uint8(ordered_meta, encoder), dtype=h5py.vlen_dtype(np.uint8)
                 )
 
             # payloads were already encoded by the workers in on-disk order
             if extra_key is not None:
                 h5_file.create_dataset(
-                    extra_key,
-                    data=_bytes_to_vlen_uint8(encoded_extras_in_order),
-                    dtype=h5py.vlen_dtype(np.uint8),
+                    extra_key, data=_bytes_to_vlen_uint8(encoded_extras_in_order), dtype=h5py.vlen_dtype(np.uint8)
                 )
     finally:
         for shm in slot_shms:
