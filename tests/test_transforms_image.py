@@ -1,4 +1,4 @@
-from typing import Literal, Tuple
+from typing import Literal, Tuple, Union
 
 import numpy as np
 import pytest
@@ -33,10 +33,15 @@ class TestTransformsImage:
     @pytest.mark.parametrize("mode", ["train", "eval"])
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     @pytest.mark.parametrize("dim", [(0,), (-1,), (0, 1)])
+    @pytest.mark.parametrize("scale", [1.0, (0.5, 2.0)])
     def test_random_noise(
-        self, mode: Literal["train", "eval"], backend: Literal["numpy", "torch"], dim: Tuple[int, ...]
+        self,
+        mode: Literal["train", "eval"],
+        backend: Literal["numpy", "torch"],
+        dim: Tuple[int, ...],
+        scale: Union[float, Tuple[float, float]],
     ) -> None:
-        tf = tfs.RandomNoise(dim=dim)
+        tf = tfs.RandomNoise(dim=dim, scale=scale)
         transform_set_mode(tf, mode)
 
         x = transform_create_input(backend, (10, 10))
@@ -68,6 +73,30 @@ class TestTransformsImage:
             assert y_uint8.dtype == torch.uint8
             # check that clipping kept values within the valid uint8 range (no wraparound)
             assert y_uint8.min() >= 0 and y_uint8.max() <= 255
+
+    @pytest.mark.parametrize("backend", ["numpy", "torch"])
+    @pytest.mark.parametrize("scale", [1.0, (0.5, 2.0)])
+    def test_random_noise_global_rng(
+        self, backend: Literal["numpy", "torch"], scale: Union[float, Tuple[float, float]]
+    ) -> None:
+        tf = tfs.RandomNoise(dim=(0, 1), scale=scale)
+        transform_set_mode(tf, "train")
+
+        # mid-range input so no pixel gets clipped
+        x = transform_create_input(backend, (16, 16), fill=127.5)
+
+        # replay the global RNG: the std is drawn first (if a range), then the noise with that std
+        np.random.seed(0)
+        std = np.random.uniform(*scale) if isinstance(scale, tuple) else scale
+        expected_noise = np.random.normal(0, std, (16, 16))
+
+        np.random.seed(0)
+        y = tf(x)
+        noise = (y - x) if backend == "numpy" else (y - x).numpy()
+
+        assert np.allclose(noise, expected_noise, atol=1e-4)
+        if isinstance(scale, tuple):
+            assert scale[0] <= std < scale[1]
 
     @pytest.mark.parametrize("backend", ["numpy", "torch"])
     @pytest.mark.parametrize("scale", [0.25, 0.5, 1.0, 2.0])

@@ -248,28 +248,36 @@ class RandomErasing(TransformerWithMode):
 class RandomNoise(TransformerWithMode):
     """Add i.i.d. Gaussian noise with standard deviation ``scale`` to the input.
 
+    If ``scale`` is a ``(low, high)`` tuple, the noise's standard deviation is
+    drawn uniformly from the half-open interval ``[low, high)`` once per call
+    and shared by the whole input.
+
     The image is expected in ``[0, 255]`` and the result is always clipped back
     to that range (to the dtype's own bounds for integer dtypes, to ``[0, 255]``
     for float dtypes). Pixels within ``scale`` of the clip range's floor or
     ceiling are censored asymmetrically (only the noise draws pushing them back
     toward the interior survive unclipped), which biases values near the
-    boundary away from the floor/ceiling. A private ``numpy.random.Generator``
-    seeded at construction makes the noise reproducible independent of the
-    global RNG state and call order.
+    boundary away from the floor/ceiling. Randomness comes from the global
+    ``numpy.random`` state, which the caller (or a ``worker_init_fn``) seeds.
     """
 
-    def __init__(self, dim: Tuple[int, ...], scale: float = 1.0, *, seed: int = 0) -> None:
+    def __init__(self, dim: Tuple[int, ...], scale: Union[float, Tuple[float, float]] = 1.0) -> None:
         super().__init__()
         self._dim = dim
         self._scale = scale
-        self._rng = np.random.default_rng(seed)
+
+    def _get_scale(self) -> float:
+        if isinstance(self._scale, tuple):
+            return np.random.uniform(*self._scale)
+        else:
+            return self._scale
 
     def __call__(self, x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         if self.is_eval_mode():
             return x
 
         size = tuple(x.shape[d] for d in self._dim)
-        noise = self._rng.normal(0, self._scale, size)  # mean=0, std=scale, dtype=float64
+        noise = np.random.normal(0, self._get_scale(), size)  # mean=0, std=scale, dtype=float64
 
         if isinstance(x, np.ndarray):
             if issubclass(x.dtype.type, np.integer):
