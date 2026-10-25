@@ -12,9 +12,8 @@ from dltoolbox.dataset.metadata.sample_meta_protocols import SampleMetaDecoder
 class LazySampleMetaStore[T](ISampleMetaStore[T]):
     """Holds references to the sample_ids and sample_meta datasets; reads rows on demand.
 
-    Builds an id-to-index map at construction so `get_by_id` stays O(1). Sample ids
-    themselves are not kept as a list — `get_by_index` reads the id from the HDF5
-    dataset per call alongside the meta read.
+    Builds an id list and an id-to-index map at construction so `get_by_id` stays O(1)
+    and `get_by_index` reads only the meta rows from HDF5, never the id.
 
     If `select_indices` is given, the store exposes just that view — `__len__`,
     `get_by_index`, and `get_by_id` all operate on the selection.
@@ -49,9 +48,7 @@ class LazySampleMetaStore[T](ISampleMetaStore[T]):
 
     def get_by_index(self, index: int) -> T:
         original_index = self._original_indices[index] if self._original_indices is not None else index
-        sample_id = self._sample_ids_ds[original_index]
-        if isinstance(sample_id, bytes):
-            sample_id = sample_id.decode("utf-8")
+        sample_id = self._ids[index]
         rows = tuple(bytes(ds[original_index]) for ds in self._sample_meta_dss)
         return self._decoder(rows if self._multi else rows[0], sample_id)
 

@@ -49,6 +49,7 @@ class H5Dataset[T](Dataset):
         label_transform: Transformer | None = None,
         cache_chunks: int | None = None,
         rdcc_override: dict[str, int | float] | None = None,
+        metadata_cache_bytes: int | None = None,
         ignore_user_block: bool = True,
         sample_meta_decoder: SampleMetaDecoder[T] | None = None,
         sample_meta_store_mode: Literal["lazy", "eager", "auto"] = "auto",
@@ -81,6 +82,14 @@ class H5Dataset[T](Dataset):
             rdcc_override: raw ``rdcc_*`` keyword arguments (``rdcc_nbytes``, ``rdcc_nslots``, ``rdcc_w0``) passed
                 straight to ``h5py.File``. Takes precedence over ``cache_chunks`` — an escape hatch for tuning the
                 cache by hand.
+            metadata_cache_bytes: fixed size in bytes of the HDF5 metadata cache of the open file (``"disk"`` mode
+                only; ignored in ``"memory"`` mode, which closes the file after loading). The metadata cache holds
+                chunk-index nodes and the global heap collections behind variable-length datasets such as the
+                sample ids and sample metadata. By default HDF5 grows it on its own from 2 MB up to 32 MB, and under
+                random access over many distinct samples the process holds roughly 3x the reported cache size. This
+                pins the initial, minimum and maximum size to this value and disables resizing. ``None`` keeps
+                HDF5's default; otherwise must be in [1 KiB, 128 MiB]. The limit applies per open file and per
+                process, so every ``DataLoader`` worker holds its own cache of up to this size for each file.
             ignore_user_block: when ``False``, parse the file's user block as dataset metadata and validate its
                 sample count against the data dataset.
             sample_meta_decoder: decoder that turns raw per-sample metadata into ``T``; when given, a sample-meta
@@ -93,6 +102,10 @@ class H5Dataset[T](Dataset):
             given file within the process. HDF5 shares one handle per file path, so a second ``H5Dataset`` over the
             same ``h5_path`` while the first is still open (e.g. train/val splits via ``select_indices`` in
             ``"disk"`` mode) silently reuses the first open's cache settings and ignores its own.
+
+            The metadata cache (``metadata_cache_bytes``) is shared through that same handle but is set after
+            opening, so the opposite holds: the most recent ``H5Dataset`` that passes a value resizes the cache for
+            every open dataset over that path, and one passing ``None`` leaves the current setting untouched.
         """
         if select_indices is not None and select_sample_ids is not None:
             raise ConflictingSelectorsError()
@@ -130,6 +143,7 @@ class H5Dataset[T](Dataset):
                 label_transform=label_transform,
                 cache_chunks=cache_chunks,
                 rdcc_override=rdcc_override,
+                metadata_cache_bytes=metadata_cache_bytes,
             )
         elif mode == "memory":
             self._instance = H5DatasetMemory(

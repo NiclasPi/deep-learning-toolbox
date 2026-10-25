@@ -8,6 +8,7 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
+from dltoolbox.dataset._utils import fix_metadata_cache_size
 from dltoolbox.dataset.create import create_dataset_from_arrays
 from dltoolbox.dataset.errors import (
     ConflictingSelectorsError,
@@ -524,3 +525,62 @@ def test_invalid_cache_chunks_raises_through_public_api(
     h5_path, _ = create_temporary_hdf5_chunked
     with pytest.raises(ValueError):
         H5Dataset(mode, h5_path, cache_chunks=bad)
+
+
+@pytest.fixture
+def fresh_hdf5_with_meta(tmp_path, data_shape, labels_shape) -> str:
+    """Per-test file so no HDF5 handle (and hence no metadata cache config) is shared across tests."""
+    path = tmp_path / "data.h5"
+    create_dataset_from_arrays(
+        str(path),
+        data=np.random.randn(*data_shape).astype(np.float16),
+        labels=np.random.randn(*labels_shape).astype(np.float16),
+        sample_ids=[f"s{i}" for i in range(data_shape[0])],
+        sample_meta=[SampleMeta(id=i) for i in range(data_shape[0])],
+        sample_meta_encoder=_encode_sample_meta,
+    )
+    return str(path)
+
+
+def test_metadata_cache_bytes_pins_metadata_cache(fresh_hdf5_with_meta: str) -> None:
+    dataset = H5Dataset[SampleMeta](
+        "disk", fresh_hdf5_with_meta, metadata_cache_bytes=1 << 20, sample_meta_decoder=_decode_sample_meta
+    )
+    config = dataset.h5_file.id.get_mdc_config()
+    assert config.initial_size == config.min_size == config.max_size == 1 << 20
+    assert (config.incr_mode, config.flash_incr_mode, config.decr_mode) == (0, 0, 0)
+
+    # the cache never grows past the limit while samples and their metadata are read
+    for i in range(len(dataset)):
+        assert dataset[i][2] == SampleMeta(id=i)
+        assert dataset.h5_file.id.get_mdc_size()[0] <= 1 << 20
+
+
+def test_metadata_cache_bytes_none_leaves_hdf5_defaults(fresh_hdf5_with_meta: str) -> None:
+    with h5py.File.in_memory() as f:
+        default_max_size = f.id.get_mdc_config().max_size
+
+    dataset = H5Dataset("disk", fresh_hdf5_with_meta)
+    assert dataset.h5_file.id.get_mdc_config().max_size == default_max_size
+
+
+def test_metadata_cache_bytes_ignored_in_memory_mode(fresh_hdf5_with_meta: str) -> None:
+    with h5py.File.in_memory() as f:
+        default_max_size = f.id.get_mdc_config().max_size
+
+    # memory mode closes its file after loading, so observe the cache through a handle kept
+    # open across construction; HDF5 shares it with the dataset's opens of the same path
+    with h5py.File(fresh_hdf5_with_meta, "r") as observer:
+        H5Dataset("memory", fresh_hdf5_with_meta, metadata_cache_bytes=1 << 20)
+        assert observer.id.get_mdc_config().max_size == default_max_size
+
+        # control: a pin made through a brief open of the same path is visible to the observer
+        with h5py.File(fresh_hdf5_with_meta, "r") as brief:
+            fix_metadata_cache_size(brief, 1 << 20)
+        assert observer.id.get_mdc_config().max_size == 1 << 20
+
+
+@pytest.mark.parametrize("bad", [0, 1023, (128 << 20) + 1])
+def test_invalid_metadata_cache_bytes_raises(fresh_hdf5_with_meta: str, bad: int) -> None:
+    with pytest.raises(ValueError):
+        H5Dataset("disk", fresh_hdf5_with_meta, metadata_cache_bytes=bad)

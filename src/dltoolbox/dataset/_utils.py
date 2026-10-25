@@ -32,6 +32,34 @@ def require_key(h5_file: h5py.File, key: str) -> None:
         raise H5DatasetMissingKeyError(key)
 
 
+# HDF5's bounds on the metadata cache size (H5C__MIN_MAX_CACHE_SIZE / H5C__MAX_MAX_CACHE_SIZE)
+_MDC_MIN_BYTES = 1024
+_MDC_MAX_BYTES = 128 * 1024 * 1024
+
+
+def fix_metadata_cache_size(h5_file: h5py.File, metadata_cache_bytes: int | None) -> None:
+    """Pin an open file's HDF5 metadata cache to exactly ``metadata_cache_bytes``.
+
+    Sets the initial, minimum and maximum size to the same value and disables automatic
+    resizing, so the cache neither grows past the limit nor shrinks below it. ``None``
+    leaves HDF5's default adaptive cache (2 MB initial, up to 32 MB) in place. HDF5 accepts
+    sizes from 1 KiB to 128 MiB inclusive.
+    """
+    if metadata_cache_bytes is None:
+        return
+    if not _MDC_MIN_BYTES <= metadata_cache_bytes <= _MDC_MAX_BYTES:
+        raise ValueError(
+            f"metadata_cache_bytes must be in [{_MDC_MIN_BYTES}, {_MDC_MAX_BYTES}], got {metadata_cache_bytes}"
+        )
+    config = h5_file.id.get_mdc_config()
+    config.set_initial_size = True
+    config.initial_size = config.min_size = config.max_size = metadata_cache_bytes
+    config.incr_mode = 0  # H5C_incr__off
+    config.flash_incr_mode = 0  # H5C_flash_incr__off
+    config.decr_mode = 0  # H5C_decr__off
+    h5_file.id.set_mdc_config(config)
+
+
 def derive_rdcc_args(
     h5_dataset: h5py.Dataset, cache_chunks: int | None, rdcc_override: dict[str, int | float] | None = None
 ) -> dict[str, int | float]:

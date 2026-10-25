@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import pytest
 
-from dltoolbox.dataset._utils import derive_rdcc_args, read_ids
+from dltoolbox.dataset._utils import derive_rdcc_args, fix_metadata_cache_size, read_ids
 
 
 @pytest.fixture
@@ -91,3 +91,24 @@ def test_derive_rdcc_args_validates_before_contiguous_check(h5_file: h5py.File) 
     ds = h5_file.create_dataset("contiguous", data=np.zeros((100, 4, 4), dtype="f4"))
     with pytest.raises(ValueError):
         derive_rdcc_args(ds, cache_chunks=-1)
+
+
+@pytest.mark.parametrize("nbytes", [1024, 1 << 20, 128 << 20])
+def test_fix_metadata_cache_size_pins_size_and_disables_resizing(h5_file: h5py.File, nbytes: int) -> None:
+    fix_metadata_cache_size(h5_file, nbytes)
+    config = h5_file.id.get_mdc_config()
+    assert config.initial_size == config.min_size == config.max_size == nbytes
+    assert (config.incr_mode, config.flash_incr_mode, config.decr_mode) == (0, 0, 0)
+
+
+def test_fix_metadata_cache_size_none_is_noop(h5_file: h5py.File) -> None:
+    before = h5_file.id.get_mdc_config()
+    fix_metadata_cache_size(h5_file, None)
+    after = h5_file.id.get_mdc_config()
+    assert (after.max_size, after.min_size, after.incr_mode) == (before.max_size, before.min_size, before.incr_mode)
+
+
+@pytest.mark.parametrize("bad", [-1, 0, 1023, (128 << 20) + 1])
+def test_fix_metadata_cache_size_rejects_out_of_range(h5_file: h5py.File, bad: int) -> None:
+    with pytest.raises(ValueError):
+        fix_metadata_cache_size(h5_file, bad)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dltoolbox"
-version = "0.1.4"
+version = "0.1.5"
 description = "Deep Learning Toolbox"
 #license = "LICENSE"
 #readme = "README.md"
@@ -29,7 +29,8 @@ keywords = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "h5py",
+    # h5py 3.15.1 leaks a 32-byte Python object for every HDF5 dataspace it creates
+    "h5py!=3.15.*",
     "numpy",
     "opencv-python-headless",
     "pillow",

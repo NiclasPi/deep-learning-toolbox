@@ -5,7 +5,7 @@ import numpy as np
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from dltoolbox.dataset._utils import derive_rdcc_args, require_key
+from dltoolbox.dataset._utils import derive_rdcc_args, fix_metadata_cache_size, require_key
 from dltoolbox.dataset.errors import H5DatasetShapeMismatchError
 from dltoolbox.transforms import Transformer
 
@@ -26,6 +26,7 @@ class H5DatasetDisk(Dataset):
         label_transform: Optional[Transformer] = None,
         cache_chunks: Optional[int] = None,
         rdcc_override: Optional[dict[str, int | float]] = None,
+        metadata_cache_bytes: Optional[int] = None,
     ) -> None:
         self.h5_data_key = h5_data_key
         self.h5_label_key = h5_label_key
@@ -51,10 +52,18 @@ class H5DatasetDisk(Dataset):
                 self._ub_bytes = h5_file.read(self._ub_size)
 
         self.h5_file = h5py.File(h5_path, "r", **rdcc_args)
+        try:
+            fix_metadata_cache_size(self.h5_file, metadata_cache_bytes)
+        except ValueError:
+            self.h5_file.close()
+            raise
         self._data_ds = self.h5_file[h5_data_key]
+        # ndim is fixed per dataset; reading it per sample costs an HDF5 dataspace call each time
+        self._data_ndim: int = self._data_ds.ndim
         if self.static_label is None:
             require_key(self.h5_file, h5_label_key)
             self._label_ds = self.h5_file[h5_label_key]
+            self._label_ndim: int = self._label_ds.ndim
             if self._data_ds.shape[data_row_dim] != self._label_ds.shape[label_row_dim]:
                 raise H5DatasetShapeMismatchError(
                     self._data_ds.shape[data_row_dim], self._label_ds.shape[label_row_dim]
@@ -67,8 +76,8 @@ class H5DatasetDisk(Dataset):
             self.h5_data_len = self._data_ds.shape[data_row_dim]
 
     @staticmethod
-    def _h5_take(dataset: h5py.Dataset, index: int, axis: int) -> np.ndarray:
-        slices = [index if d == axis else slice(None) for d in range(dataset.ndim)]
+    def _h5_take(dataset: h5py.Dataset, index: int, axis: int, ndim: int) -> np.ndarray:
+        slices = [index if d == axis else slice(None) for d in range(ndim)]
         return dataset[tuple(slices)]
 
     @property
@@ -86,11 +95,11 @@ class H5DatasetDisk(Dataset):
         if self.selected_indices is not None:
             index = self.selected_indices[index]
 
-        data = self._h5_take(self._data_ds, index, axis=self.data_row_dim)
+        data = self._h5_take(self._data_ds, index, axis=self.data_row_dim, ndim=self._data_ndim)
         label = (
             self.static_label
             if self.static_label is not None
-            else self._h5_take(self._label_ds, index, axis=self.label_row_dim)
+            else self._h5_take(self._label_ds, index, axis=self.label_row_dim, ndim=self._label_ndim)
         )
 
         if self.data_transform is not None:
